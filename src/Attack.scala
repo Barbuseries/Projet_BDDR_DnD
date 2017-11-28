@@ -2,7 +2,6 @@ import scala.collection.mutable.ArrayBuffer
 
 // TODO: Take into account the creature type when computing the damages.
 abstract case class Attack(name: String) extends Serializable {
-  // TODO: Handle dices
   protected class DamageFormula(diceCount: Int, dice: Dice, baseDamage: Int) extends Serializable {
     def compute(): Int = {
       var result = baseDamage
@@ -34,9 +33,7 @@ abstract case class Attack(name: String) extends Serializable {
     assert(damageFormula != null)
 
     var total = 0
-
-    // NOTE: We could just compute the total damages and _then_ hit the creature,
-    // instead of hitting it every time.
+    
     println(s"\t${attacker.name} targets ${defender.name}...")
 
     allStrikes.map(s => {
