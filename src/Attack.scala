@@ -33,32 +33,53 @@ abstract case class Attack(name: String) extends Serializable {
     assert(damageFormula != null)
 
     var total = 0
-    
+
     println(s"\t${attacker.name} targets ${defender.name}...")
 
     allStrikes.map(s => {
       if (defender.isAlive()) {
-        // TODO: If Dice.d20.roll() == 1, it is always a miss
-        //                          == 20, it may be a critical if a second computation of totalArmorBreak (dice + ) > defender.armor
-        //                          otherwhise, it is a regular hit
-        val totalArmorBreak = Dice.d20.roll() + s;
+        val roll = Dice.d20.roll()
 
-        if (totalArmorBreak > defender.armor) {
-          var damages = damageFormula.compute()
-          val description = describe(attacker, defender) + s" for ${damages} hp!"
+        if (roll != 1) {
+          var pierceDefence = false
 
-          defender.takeDamages(damages)
-          println(s"\t$description")
+          if (roll == 20) {
+            pierceDefence = true
 
-          total += damages
+            if ((Dice.d20.roll() + s) > defender.armor) {
+              println(Console.GREEN + "\tCritical hit!")
+              // TODO: ... implement?
+              println(s"\t\t${Console.RED_B}but not implemented yet...${Console.RESET}")
+            }
+            else {
+              println(s"\t${attacker.name} pierced ${defender.name}'s defenses!")
+            }
+          }
+          else {
+            val totalArmorBreak = roll + s;
+            pierceDefence = (totalArmorBreak > defender.armor)
+          }
 
-          if (!defender.isAlive()) {
-            println(s"${Console.RED}\t${defender.name} was slained by ${attacker.name}!${Console.BLACK}")
-            return total
+          if (pierceDefence) {
+            var damages = damageFormula.compute()
+            val description = describe(attacker, defender) + s" for ${damages} hp!"
+
+            defender.takeDamages(damages)
+            println(s"\t$description")
+
+            total += damages
+
+            if (!defender.isAlive()) {
+              println(s"${Console.RED}\t${defender.name} was slained by ${attacker.name}!${Console.RESET}")
+              return total
+            }
+          }
+          else {
+            println(s"\t${defender.name} blocked the attack!")
           }
         }
         else {
-          println(s"\t${defender.name} blocked the attack!")
+          println("\tAnd misses miserably...")
         }
       }
     })
