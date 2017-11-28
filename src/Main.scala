@@ -63,7 +63,7 @@ object Main {
       orderList.map(id => {
         var c = graph.vertices.filter(_._1 == id).first()._2
 
-        if ((c.health  > 0) && (i == 0)) {
+        if ((c.isAlive()) && (i == 0)) {
           c.play(id, graph)
           //i = 1
         }

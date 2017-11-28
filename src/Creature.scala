@@ -4,11 +4,15 @@ import org.apache.spark.graphx.{Graph, VertexId}
 import org.jsoup.{HttpStatusException, Jsoup}
 import org.jsoup.nodes.Document
 
+import scala.collection.mutable.ArrayBuffer
+
 case class Creature(val name : String) extends Serializable {
   var initiative: Int = 0
   var health: Int = 0
 
   var armor: Int = 0
+
+  var allAttacks: ArrayBuffer[Attack] = ArrayBuffer.empty[Attack]
 
   def loadFromUrl(url : String): Unit = {
     var doc = getDoc(url)
@@ -33,15 +37,36 @@ case class Creature(val name : String) extends Serializable {
   }
 
   def play(id: VertexId, graph: Graph[Creature, Int]) : Unit = {
+    println(s"$name is playing...")
     // TODO (way later): Ask allies if they need anything
 
     // TODO: Ask enemies what their life is. Attack the one with the lowest health
 
     val result = findWeakestEnemy(id, graph)
 
-    println(id, name, "toto")
-    println(result)
-    println("")
+    if (result._2 != null) {
+      attack(result._2)
+    }
+  }
+
+  def isAlive(): Boolean = {
+    return health > 0
+  }
+
+  def takeDamages(damages: Int): Unit = {
+    health -= damages
+
+    if (health < 0) health = 0
+  }
+
+  def attack(creature: Creature): Unit = {
+    for (a <- allAttacks) {
+      if (a.canHit(creature)) {
+        a.hit(creature)
+
+        return
+      }
+    }
   }
 
   private def findWeakestEnemy(id: VertexId, graph: Graph[Creature, Int]) : (VertexId, Creature) = {
@@ -52,7 +77,7 @@ case class Creature(val name : String) extends Serializable {
         if ((edge.srcId == id) && isEnemy) {
           val creature = edge.dstAttr
 
-          if (creature.health > 0) {
+          if (creature.isAlive()) {
             edge.sendToSrc((edge.dstId, edge.dstAttr))
           }
         }
