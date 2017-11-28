@@ -19,20 +19,27 @@ case class Attack extends Serializable {
     allStrikes += new Strike(20, 40)
   }
 
-  def hit(creature: Creature): Unit = {
+  def hit(creature: Creature): Int = {
+    var total = 0
+
     // NOTE: We could just compute the total damages and _then_ hit the creature,
     // instead of hitting it every time.
     allStrikes.map(s => {
       if (creature.isAlive()) {
         val totalArmorBreak = Dice.d20() + s.armorBreak;
 
-        if (totalArmorBreak < creature.armor) return;
+        if (totalArmorBreak > creature.armor) {
 
-        val damages = s.computeDamages()
+          val damages = s.computeDamages()
 
-        creature.takeDamages(damages)
+          creature.takeDamages(damages)
+
+          total += damages
+        }
       }
     })
+
+    return total
   }
 
   def canHit(creature: Creature): Boolean = {

@@ -38,7 +38,7 @@ case class Creature(val name : String) extends Serializable {
   }
 
   def play(id: VertexId, graph: Graph[Int, Int], store: Broadcast[CreatureStore.type]) : Unit = {
-    println(s"$name is playing...")
+    println(s"$name ($health) is playing...")
     // TODO (way later): Ask allies if they need anything
 
     // TODO: Ask enemies what their life is. Attack the one with the lowest health
@@ -63,8 +63,9 @@ case class Creature(val name : String) extends Serializable {
   def attack(creature: Creature): Unit = {
     for (a <- allAttacks) {
       if (a.canHit(creature)) {
-        println(s"\t$name attacks ${creature.name}!")
-        a.hit(creature)
+        var damages = a.hit(creature)
+
+        println(s"\t$name attacks ${creature.name} for $damages hp!")
 
         return
       }
