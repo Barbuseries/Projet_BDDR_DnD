@@ -6,10 +6,10 @@ import scala.collection.mutable.ArrayBuffer
 class Team () {
   var members: ArrayBuffer[Int] = ArrayBuffer.empty[Int]
 
-  def add(creature_name: String, url : String, count : Int = 1): Unit = {
-    var creatureTemplate = new Creature(creature_name)
-    creatureTemplate.loadFromUrl(url)
-    println(creature_name)
+  def add(creatureTemplate: Creature, count : Int = 1): Unit = {
+    creatureTemplate.init()
+
+    println(creatureTemplate.name)
     println("initiative", creatureTemplate.initiative)
     println("health", creatureTemplate.health)
     println("armor", creatureTemplate.armor)

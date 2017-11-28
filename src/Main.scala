@@ -1,3 +1,4 @@
+import Bestiary.{BarbaresOrc, Solar, Warlord, WorgRider}
 import org.apache.spark.graphx.{Edge, Graph, VertexId}
 import org.apache.spark.{SparkConf, SparkContext, graphx}
 
@@ -42,24 +43,21 @@ object Main {
 
     var store = sc.broadcast(CreatureStore)
 
+    // TODO: To make it simple to construct, create classes to work as 'aliases'.
     var allies = new Team()
-    allies.add("Solar", "http://www.d20pfsrd.com/bestiary/monster-listings/outsiders/angel/solar")
-    val bogusAttack = new Attack()
-    bogusAttack.parse("toto")
-    CreatureStore.get(allies.members(0)).allAttacks += bogusAttack
+    allies.add(Solar())
 
     var enemies = new Team()
-    enemies.add("Worg Rider", "http://www.d20pfsrd.com/bestiary/npc-s/npc-1/orc-worg-rider/", 9)
-    enemies.add("Warlord", "http://www.d20pfsrd.com/bestiary/npc-s/npc-12/brutal-warlord-half-orc-fighter-13/")
-    enemies.add("Barbares Orc", "http://www.d20pfsrd.com/bestiary/npc-s/npc-10/double-axe-fury-half-orc-barbarian-11/", 4)
+    enemies.add(WorgRider(), 9)
+    enemies.add(Warlord())
+    enemies.add(BarbaresOrc(), 4)
 
     val graph = createGraph(sc, allies, enemies)
 
     val orderList = graph.mapVertices((id, c) => store.value.get(c).initiative).vertices.collect().sortBy(-_._2).map(_._1)
 
-    var i = 0;
     var done = false;
-    while (!done && i == 0) {
+    while (!done) {
       // TODO: Game logic
       // FIXME: This is used to iterate over all elements in order (without having to keep an index around).
       //  There may (should) be a better way to do this (having to filter is bad), but I don't know it yet.
@@ -69,9 +67,8 @@ object Main {
         var key = graph.vertices.filter(_._1 == id).first()._2
         var c = store.value.get(key)
 
-        if ((c.isAlive()) && (i == 0)) {
+        if (c.isAlive()) {
           c.play(id, graph, store)
-          //i = 1
         }
       }
     )

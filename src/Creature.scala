@@ -7,20 +7,17 @@ import org.jsoup.nodes.Document
 
 import scala.collection.mutable.ArrayBuffer
 
-case class Creature(val name : String) extends Serializable {
+abstract class Creature(val name : String, val url: String) extends Serializable {
   var initiative: Int = 0
+  // TODO: Add max hp
   var health: Int = 0
 
   var armor: Int = 0
 
   var allAttacks: ArrayBuffer[Attack] = ArrayBuffer.empty[Attack]
 
-  def loadFromUrl(url : String): Unit = {
-    var doc = getDoc(url)
-
-    initiative = getInitiative(doc)
-    health = getHealth(doc)
-    armor = getArmor(doc)
+  def init(): Unit = {
+    loadFromUrl(url)
   }
 
   // Because copy and clone do not work as I would like...
@@ -39,14 +36,21 @@ case class Creature(val name : String) extends Serializable {
 
   def play(id: VertexId, graph: Graph[Int, Int], store: Broadcast[CreatureStore.type]) : Unit = {
     println(s"$name ($health) is playing...")
+    var played = false
     // TODO (way later): Ask allies if they need anything
 
-    // TODO: Ask enemies what their life is. Attack the one with the lowest health
-
+    // TODO: Change to use a custom strength evaluation function
+    // Ask enemies what their life is. Attack the one with the lowest health
     val result = findWeakestEnemy(id, graph, store)
 
     if (result._2 != -1) {
-      attack(store.value.get(result._2))
+      played = attack(store.value.get(result._2))
+    }
+
+
+
+    if (!played) {
+      println("\tBut can not do anything...")
     }
   }
 
@@ -60,16 +64,17 @@ case class Creature(val name : String) extends Serializable {
     if (health < 0) health = 0
   }
 
-  def attack(creature: Creature): Unit = {
-    for (a <- allAttacks) {
-      if (a.canHit(creature)) {
-        var damages = a.hit(creature)
+  def attack(creature: Creature): Boolean = {
+    val validAttacks = allAttacks.filter(_.canHit(creature))
 
-        println(s"\t$name attacks ${creature.name} for $damages hp!")
+    if (validAttacks.length == 0) return false
 
-        return
-      }
-    }
+    // TODO: Can be changed to rank based on min/max/average damages
+    val choosenAttack = validAttacks(scala.util.Random.nextInt(validAttacks.length))
+
+    var damages = choosenAttack.hit(this, creature)
+
+    return true
   }
 
   private def findWeakestEnemy(id: VertexId, graph: Graph[Int, Int], store: Broadcast[CreatureStore.type]) : (VertexId, Int) = {
@@ -77,6 +82,9 @@ case class Creature(val name : String) extends Serializable {
       edge => {
         val isEnemy = edge.toEdgeTriplet.attr == 0
 
+        // NOTE: We could check for ((edge.srcId == id) || (edge.dstId == id))
+        // if we use a directed graph representation (we which do), with one edge between each vertex
+        // (currently, there are two (one for each direction because we want an undirected graph).
         if ((edge.srcId == id) && isEnemy) {
           val key = edge.dstAttr
           val creature = store.value.get(key)
@@ -134,5 +142,39 @@ case class Creature(val name : String) extends Serializable {
       case hse: HttpStatusException => { println(s"invalid url: $url"); return null }
       case e: Exception => { println(e); return null }
     }
+  }
+
+  protected def loadFromUrl(url : String): Unit = {
+    var doc = getDoc(url)
+
+    initiative = getInitiative(doc)
+    health = getHealth(doc)
+    armor = getArmor(doc)
+  }
+}
+
+object Bestiary {
+  case class Solar() extends Creature("Solar",
+    "http://www.d20pfsrd.com/bestiary/monster-listings/outsiders/angel/solar") {
+    // TODO: Range attacks
+    allAttacks += DancingGreatSword
+    allAttacks += Slam
+  }
+
+  case class WorgRider() extends Creature("Worg Rider",
+    "http://www.d20pfsrd.com/bestiary/npc-s/npc-1/orc-worg-rider/") {
+    // TODO: Range attacks
+    allAttacks += MWKBattleAxe
+  }
+
+  case class Warlord() extends Creature("Warlord",
+    "http://www.d20pfsrd.com/bestiary/npc-s/npc-12/brutal-warlord-half-orc-fighter-13/") {
+
+    // TODO: Attacks
+  }
+
+  case class BarbaresOrc() extends Creature("Barbares Orc",
+    "http://www.d20pfsrd.com/bestiary/npc-s/npc-10/double-axe-fury-half-orc-barbarian-11/") {
+    // TODO: Attacks
   }
 }

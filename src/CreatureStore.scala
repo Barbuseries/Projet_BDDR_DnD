@@ -1,13 +1,10 @@
 import scala.collection.mutable.ArrayBuffer
 
-// TODO/NOTE: This is intented to store each creature separatly
+// TODO/NOTE: This is intented to store each creature separately
 // from the graph itself (because the latter is immutable).
 //
 // Therefore, each vertex of the graph only has a key into this storage
 // from which we can get (and modify) the associated creature.
-//
-// For perfomance reasons, it may be better to use a map
-// (that is why getCreature takes a key and not an index, in case we change that).
 //
 // The other important point is for register to just take a creature
 // (the graph is created later, so we have no info on that).
