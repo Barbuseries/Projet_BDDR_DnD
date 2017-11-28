@@ -1,5 +1,6 @@
 import java.io.{FileInputStream, FileOutputStream, ObjectInputStream, ObjectOutputStream}
 
+import org.apache.spark.broadcast.Broadcast
 import org.apache.spark.graphx.{Graph, VertexId}
 import org.jsoup.{HttpStatusException, Jsoup}
 import org.jsoup.nodes.Document
@@ -36,16 +37,16 @@ case class Creature(val name : String) extends Serializable {
     return obj
   }
 
-  def play(id: VertexId, graph: Graph[Creature, Int]) : Unit = {
+  def play(id: VertexId, graph: Graph[Int, Int], store: Broadcast[CreatureStore.type]) : Unit = {
     println(s"$name is playing...")
     // TODO (way later): Ask allies if they need anything
 
     // TODO: Ask enemies what their life is. Attack the one with the lowest health
 
-    val result = findWeakestEnemy(id, graph)
+    val result = findWeakestEnemy(id, graph, store)
 
-    if (result._2 != null) {
-      attack(result._2)
+    if (result._2 != -1) {
+      attack(store.value.get(result._2))
     }
   }
 
@@ -62,6 +63,7 @@ case class Creature(val name : String) extends Serializable {
   def attack(creature: Creature): Unit = {
     for (a <- allAttacks) {
       if (a.canHit(creature)) {
+        println(s"\t$name attacks ${creature.name}!")
         a.hit(creature)
 
         return
@@ -69,28 +71,32 @@ case class Creature(val name : String) extends Serializable {
     }
   }
 
-  private def findWeakestEnemy(id: VertexId, graph: Graph[Creature, Int]) : (VertexId, Creature) = {
-    val tempResult = graph.aggregateMessages[(VertexId, Creature)](
+  private def findWeakestEnemy(id: VertexId, graph: Graph[Int, Int], store: Broadcast[CreatureStore.type]) : (VertexId, Int) = {
+    val tempResult = graph.aggregateMessages[(VertexId, Int, Int)](
       edge => {
         val isEnemy = edge.toEdgeTriplet.attr == 0
 
         if ((edge.srcId == id) && isEnemy) {
-          val creature = edge.dstAttr
+          val key = edge.dstAttr
+          val creature = store.value.get(key)
 
           if (creature.isAlive()) {
-            edge.sendToSrc((edge.dstId, edge.dstAttr))
+            edge.sendToSrc((edge.dstId, key, creature.health))
           }
         }
       },
-      (a, b)  => if (b._2.health > a._2.health) a else b)
+      // min health
+      (a, b)  => if (b._3 > a._3) a else b)
 
-    val result = tempResult.collect()
+    val resultAggregate = tempResult.collect()
 
-    if (result.length == 0) {
-      return (-1, null)
+    if (resultAggregate.length == 0) {
+      return (-1, -1)
     }
 
-    return result(0)._2
+    // Return just the vertex id and the creature key
+    val result = resultAggregate(0)._2
+    return (result._1, result._2)
   }
 
   private def getStat(doc: Document, stat: String, p : String = ""): Int = {

@@ -15,6 +15,8 @@ case class Attack extends Serializable {
 
   def parse(str: String): Unit = {
     val result = null
+
+    allStrikes += new Strike(20, 40)
   }
 
   def hit(creature: Creature): Unit = {

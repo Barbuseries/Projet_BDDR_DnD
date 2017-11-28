@@ -4,7 +4,7 @@ import org.apache.spark.{SparkConf, SparkContext, graphx}
 import scala.collection.mutable.ArrayBuffer
 
 object Main {
-  def createGraph(sc: SparkContext, allies : Team, enemies : Team): Graph[Creature, Int] = {
+  def createGraph(sc: SparkContext, allies : Team, enemies : Team): Graph[Int, Int] = {
     val allies_len = allies.members.length
     val enemies_len = enemies.members.length
 
@@ -40,8 +40,13 @@ object Main {
     val sc = new SparkContext(conf)
     sc.setLogLevel("ERROR")
 
+    var store = sc.broadcast(CreatureStore)
+
     var allies = new Team()
     allies.add("Solar", "http://www.d20pfsrd.com/bestiary/monster-listings/outsiders/angel/solar")
+    val bogusAttack = new Attack()
+    bogusAttack.parse("toto")
+    CreatureStore.get(allies.members(0)).allAttacks += bogusAttack
 
     var enemies = new Team()
     enemies.add("Worg Rider", "http://www.d20pfsrd.com/bestiary/npc-s/npc-1/orc-worg-rider/", 9)
@@ -50,7 +55,7 @@ object Main {
 
     val graph = createGraph(sc, allies, enemies)
 
-    val orderList = graph.mapVertices((id, c) => c.initiative).vertices.collect().sortBy(-_._2).map(_._1)
+    val orderList = graph.mapVertices((id, c) => store.value.get(c).initiative).vertices.collect().sortBy(-_._2).map(_._1)
 
     var i = 0;
     var done = false;
@@ -61,10 +66,11 @@ object Main {
       // FIXME: It seems that changing any element in the graph creates a new graph. And we currently do not store it!
       //  This means that the current structure is useless...
       orderList.map(id => {
-        var c = graph.vertices.filter(_._1 == id).first()._2
+        var key = graph.vertices.filter(_._1 == id).first()._2
+        var c = store.value.get(key)
 
         if ((c.isAlive()) && (i == 0)) {
-          c.play(id, graph)
+          c.play(id, graph, store)
           //i = 1
         }
       }

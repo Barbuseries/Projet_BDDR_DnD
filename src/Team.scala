@@ -4,7 +4,7 @@ import scala.collection.mutable
 import scala.collection.mutable.ArrayBuffer
 
 class Team () {
-  var members: ArrayBuffer[Creature] = ArrayBuffer.empty[Creature]
+  var members: ArrayBuffer[Int] = ArrayBuffer.empty[Int]
 
   def add(creature_name: String, url : String, count : Int = 1): Unit = {
     var creatureTemplate = new Creature(creature_name)
@@ -17,13 +17,13 @@ class Team () {
     for (i <- 0 until count - 1) {
       var creature: Creature = creatureTemplate.bulldozerCopy()
 
-      members += creature
+      members += CreatureStore.register(creature)
     }
 
-    members += creatureTemplate
+    members += CreatureStore.register(creatureTemplate)
   }
 
-  def vertices(): ArrayBuffer[(VertexId, Creature)] = {
+  def vertices(): ArrayBuffer[(VertexId, Int)] = {
     val result = members.zipWithIndex.map{case (c, i) => (i.toLong, c)}
 
     return result
