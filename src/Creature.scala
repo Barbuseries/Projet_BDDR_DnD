@@ -170,11 +170,17 @@ object Bestiary {
   case class Warlord() extends Creature("Warlord",
     "http://www.d20pfsrd.com/bestiary/npc-s/npc-12/brutal-warlord-half-orc-fighter-13/") {
 
-    // TODO: Attacks
+    // TODO: Range attacks
+    allAttacks += ViciousFlail
+    allAttacks += LionShield
   }
 
   case class BarbaresOrc() extends Creature("Barbares Orc",
     "http://www.d20pfsrd.com/bestiary/npc-s/npc-10/double-axe-fury-half-orc-barbarian-11/") {
-    // TODO: Attacks
+    // TODO: Range attacks
+
+    allAttacks += OrcDoubleAxe
+    allAttacks += OrcDoubleAxe2
+    allAttacks += Bite
   }
 }

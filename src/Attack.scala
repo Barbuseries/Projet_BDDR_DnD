@@ -75,6 +75,7 @@ abstract case class Attack(name: String) extends Serializable {
   }
 }
 
+// Solar
 object DancingGreatSword extends Attack("+5 dancing greatsword") {
   allStrikes = ArrayBuffer[Int](35, 30, 25, 20)
   damageFormula = new DamageFormula(3, Dice.d6, 18)
@@ -96,11 +97,59 @@ object Slam extends Attack("Slam") {
   }
 }
 
-object MWKBattleAxe extends Attack("mwk battleaxe +6") {
-  allStrikes = ArrayBuffer[Int](0)
+// Worg Rider
+object MWKBattleAxe extends Attack("mwk battleaxe") {
+  allStrikes = ArrayBuffer[Int](6)
   damageFormula = new DamageFormula(1, Dice.d8, 2)
 
   override def describe(a: Creature, d: Creature): String = {
     return s"A swift swing from ${a.name}'s ${name} into ${d.name}"
+  }
+}
+
+// Warlord
+object ViciousFlail extends Attack("+1 vicious flail") {
+  allStrikes = ArrayBuffer[Int](20, 15, 10)
+  damageFormula = new DamageFormula(1, Dice.d8, 10)
+
+  override def describe(a: Creature, d: Creature): String = {
+    return s"A powerful swing from ${a.name}'s ${name} into ${d.name}"
+  }
+}
+
+object LionShield extends Attack("lion's shield") {
+  allStrikes = ArrayBuffer[Int](23)
+  damageFormula = new DamageFormula(1, Dice.d4, 6)
+
+  override def describe(a: Creature, d: Creature): String = {
+    return s"${a.name} bashes ${d.name}"
+  }
+}
+
+// Barbares Orc
+object OrcDoubleAxe extends Attack("+1 orc double axe") {
+  allStrikes = ArrayBuffer[Int](19, 14, 9)
+  damageFormula = new DamageFormula(1, Dice.d8, 10)
+
+  override def describe(a: Creature, d: Creature): String = {
+    return s"A swift swing from ${a.name}'s ${name} into ${d.name}"
+  }
+}
+
+object OrcDoubleAxe2 extends Attack("+1 orc double axe") {
+  allStrikes = ArrayBuffer[Int](17, 12)
+  damageFormula = new DamageFormula(1, Dice.d8, 7)
+
+  override def describe(a: Creature, d: Creature): String = {
+    return s"A swift swing from ${a.name}'s ${name} into ${d.name}"
+  }
+}
+
+object Bite extends Attack("bite") {
+  allStrikes = ArrayBuffer[Int](12)
+  damageFormula = new DamageFormula(1, Dice.d4, 3)
+
+  override def describe(a: Creature, d: Creature): String = {
+    return s"${a.name}'bites ${d.name}"
   }
 }

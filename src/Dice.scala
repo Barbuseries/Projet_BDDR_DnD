@@ -21,6 +21,7 @@ class Dice(n: Int) extends Serializable {
 // Common dices
 object Dice {
   case object d3  extends Dice(3)
+  case object d4  extends Dice(4)
   case object d6  extends Dice(6)
   case object d8  extends Dice(8)
   case object d10 extends Dice(10)
