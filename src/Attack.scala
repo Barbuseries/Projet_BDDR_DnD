@@ -3,10 +3,13 @@ import scala.collection.mutable.ArrayBuffer
 // TODO: Take into account the creature type when computing the damages.
 abstract case class Attack(name: String) extends Serializable {
   protected class DamageFormula(diceCount: Int, dice: Dice, baseDamage: Int) extends Serializable {
-    def compute(): Int = {
+    def compute(isCritical: Boolean = false): Int = {
       var result = baseDamage
 
-      for (i <- 0 until diceCount) {
+      var totalDiceCount = diceCount
+      if (isCritical) totalDiceCount *= 2
+
+      for (i <- 0 until totalDiceCount) {
         result += dice.roll()
       }
 
@@ -42,14 +45,15 @@ abstract case class Attack(name: String) extends Serializable {
 
         if (roll != 1) {
           var pierceDefence = false
+          var isCritical = false
 
           if (roll == 20) {
             pierceDefence = true
 
             if ((Dice.d20.roll() + s) > defender.armor) {
-              println(Console.GREEN + "\tCritical hit!")
-              // TODO: ... implement?
-              println(s"\t\t${Console.RED_B}but not implemented yet...${Console.RESET}")
+              isCritical = true
+
+              println(s"\t${Console.BLUE}Critical hit!${Console.RESET}")
             }
             else {
               println(s"\t${attacker.name} pierced ${defender.name}'s defenses!")
@@ -61,7 +65,7 @@ abstract case class Attack(name: String) extends Serializable {
           }
 
           if (pierceDefence) {
-            var damages = damageFormula.compute()
+            var damages = damageFormula.compute(isCritical)
             val description = describe(attacker, defender) + s" for ${damages} hp!"
 
             defender.takeDamages(damages)
@@ -79,7 +83,7 @@ abstract case class Attack(name: String) extends Serializable {
           }
         }
         else {
-          println("\tAnd misses miserably...")
+          println(s"\t${attacker.name} misses miserably...")
         }
       }
     })
@@ -99,7 +103,8 @@ object DancingGreatSword extends Attack("+5 dancing greatsword") {
   damageFormula = new DamageFormula(3, Dice.d6, 18)
 
   override def describe(a: Creature, d: Creature): String = {
-    val allBodyParts = Array[String]("arm", "leg", "torso", "back", "head")
+    val allBodyParts = Array[String]("arm", "leg", "torso", "back",
+                                     "head", "shoulder", "thigh", "knee")
     val randomPart = scala.util.Random.nextInt(allBodyParts.length)
 
     return s"${a.name} slashes ${d.name} right in the ${allBodyParts(randomPart)}"
