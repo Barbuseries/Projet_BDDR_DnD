@@ -1,3 +1,5 @@
+import OrcDoubleAxe2.name
+
 import scala.collection.mutable.ArrayBuffer
 
 // TODO: Implement spells (there may be a common structure with an attack,
@@ -74,6 +76,18 @@ abstract case class Attack(name: String) extends Serializable {
   }
 }
 
+class Axe(name: String) extends Attack(name) {
+  override def describe(a: Creature, d: Creature): String = {
+    return s"A swift swing from ${a.name}'s ${name} into ${d.name}"
+  }
+}
+
+class Bite(name: String = "bite") extends Attack(name) {
+  override def describe(a: Creature, d: Creature): String = {
+    return s"${a.name} bites ${d.name}"
+  }
+}
+
 // Solar
 object DancingGreatSword extends Attack("+5 dancing greatsword") {
   allStrikes = ArrayBuffer[Int](35, 30, 25, 20)
@@ -98,13 +112,9 @@ object Slam extends Attack("Slam") {
 }
 
 // Worg Rider
-object MWKBattleAxe extends Attack("mwk battleaxe") {
+object MWKBattleAxe extends Axe("mwk battleaxe") {
   allStrikes = ArrayBuffer[Int](6)
   damageFormula = new Formula(1, Dice.d8, 2)
-
-  override def describe(a: Creature, d: Creature): String = {
-    return s"A swift swing from ${a.name}'s ${name} into ${d.name}"
-  }
 }
 
 // Warlord
@@ -127,29 +137,60 @@ object LionShield extends Attack("lion's shield") {
 }
 
 // Barbares Orc
-object OrcDoubleAxe extends Attack("+1 orc double axe") {
+object OrcDoubleAxe extends Axe("+1 orc double axe") {
   allStrikes = ArrayBuffer[Int](19, 14, 9)
   damageFormula = new Formula(1, Dice.d8, 10)
-
-  override def describe(a: Creature, d: Creature): String = {
-    return s"A swift swing from ${a.name}'s ${name} into ${d.name}"
-  }
 }
 
-object OrcDoubleAxe2 extends Attack("+1 orc double axe") {
+object OrcDoubleAxe2 extends Axe("+1 orc double axe") {
   allStrikes = ArrayBuffer[Int](17, 12)
   damageFormula = new Formula(1, Dice.d8, 7)
+}
+
+object OrcBite extends Bite {
+  allStrikes = ArrayBuffer[Int](12)
+  damageFormula = new Formula(1, Dice.d4, 3)
+}
+
+// Orc Barbarian
+object GreatAxe extends Axe("great axe") {
+  allStrikes = ArrayBuffer[Int](11)
+  damageFormula = new Formula(1, Dice.d12, 10)
+}
+
+// Green Great Wyrm Dragon
+object DragonBite extends Bite {
+  allStrikes = ArrayBuffer[Int](33)
+  damageFormula = new Formula(4, Dice.d8, 21)
+}
+
+// TODO/FIXME: The wiki says the dragon can do _two_ claws.
+// Currently, the only way to do this is to have two strikes.
+// In the end, it is the same. But who knows...
+object Claw extends Attack("claw") {
+  allStrikes = ArrayBuffer[Int](33, 33)
+  damageFormula = new Formula(4, Dice.d6, 14)
 
   override def describe(a: Creature, d: Creature): String = {
-    return s"A swift swing from ${a.name}'s ${name} into ${d.name}"
+    return s"${a.name} rips ${d.name} apart"
   }
 }
 
-object Bite extends Attack("bite") {
-  allStrikes = ArrayBuffer[Int](12)
-  damageFormula = new Formula(1, Dice.d4, 3)
+// TODO/FIXME: See Claw
+object Wings extends Attack("wing") {
+  allStrikes = ArrayBuffer[Int](31, 31)
+  damageFormula = new Formula(2, Dice.d8, 7)
 
   override def describe(a: Creature, d: Creature): String = {
-    return s"${a.name}'bites ${d.name}"
+    return s"${a.name} <insert wing joke here> ${d.name}"
+  }
+}
+
+object TailSlap extends Attack("tail slap") {
+  allStrikes = ArrayBuffer[Int](31)
+  damageFormula = new Formula(4, Dice.d6, 21)
+
+  override def describe(a: Creature, d: Creature): String = {
+    return s"${a.name} ${name}s ${d.name}"
   }
 }

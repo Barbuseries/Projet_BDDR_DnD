@@ -193,7 +193,11 @@ object Bestiary {
     initiative = 2
     armor = 37
 
-    // TODO: Attacks
+    // TODO: Ranged attacks
+    allAttacks += DragonBite
+    allAttacks += Claw
+    allAttacks += Wings
+    allAttacks += TailSlap
   }
 
   case class OrcBarbarian() extends Creature("Orc Barbarian") {
@@ -202,7 +206,8 @@ object Bestiary {
     initiative = 1
     armor = 15
 
-    // TODO: Attacks
+    // TODO: Ranged attacks
+    allAttacks += GreatAxe
   }
 
   case class AngelSlayer() extends Creature("Angel Slayer") {
@@ -244,6 +249,6 @@ object Bestiary {
     // TODO: Range attacks
     allAttacks += OrcDoubleAxe
     allAttacks += OrcDoubleAxe2
-    allAttacks += Bite
+    allAttacks += OrcBite
   }
 }
