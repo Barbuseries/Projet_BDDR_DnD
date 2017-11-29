@@ -1,4 +1,5 @@
 import Bestiary.{BarbaresOrc, Solar, Warlord, WorgRider}
+import org.apache.spark.broadcast.Broadcast
 import org.apache.spark.graphx.{Edge, Graph, VertexId}
 import org.apache.spark.{SparkConf, SparkContext, graphx}
 
@@ -56,13 +57,11 @@ object Main {
 
     val orderList = graph.mapVertices((id, c) => store.value.get(c).initiative).vertices.collect().sortBy(-_._2).map(_._1)
 
-    var done = false;
+    var done = false
+    var winners = 0
     while (!done) {
-      // TODO: Game logic
       // FIXME: This is used to iterate over all elements in order (without having to keep an index around).
       //  There may (should) be a better way to do this (having to filter is bad), but I don't know it yet.
-      // FIXME: It seems that changing any element in the graph creates a new graph. And we currently do not store it!
-      //  This means that the current structure is useless...
       orderList.map(id => {
         var key = graph.vertices.filter(_._1 == id).first()._2
         var c = store.value.get(key)
@@ -73,13 +72,76 @@ object Main {
       }
     )
 
-      done = onlyAlliesOrEnemies(orderList, allies.members.length)
+      // FIXME?: Btw, as the check is done after every creature has played,
+      // some may spend their time doing nothing or healing allies when
+      // their enemies are already defeated.
+      winners = getVictoriousTeam(graph, store)
+      done = (winners != 0)
+    }
+
+    winners match {
+      case 0 => {
+        println("How did _that_ happen?")
+      }
+      case 1 => {
+        println(s"\t\t\t\tALLIES WIN. ${Console.BLINK}${Console.RED}DIVINITY.${Console.RESET}")
+      }
+      case -1 => {
+        println(s"\t\t\t\t${Console.RED_B}GAME OVER${Console.RESET}")
+      }
     }
   }
 
-  // TODO/FIXME: This assumes orderList is modified to only keep alive creatures. This will probably not be the case.
-  // FIX THIS!
-  private def onlyAlliesOrEnemies(ids: Array[graphx.VertexId], offset : Int): Boolean = {
-    return ids.filter(_ < offset).length == ids.length
+  // +1 = allies
+  // -1 = enemies
+  // 0 = none
+  private def getVictoriousTeam(graph: Graph[Int, Int], store: Broadcast[CreatureStore.type]): Int = {
+    var askedFirstVertex = false
+    val teamAliveCount = graph.aggregateMessages[(Int, Int)](
+      edge => {
+        if (edge.srcId == 0) {
+          val creature = store.value.get(edge.dstAttr)
+
+          if (creature.isAlive()) {
+            if (edge.attr == 1) {
+              edge.sendToSrc((1, 0))
+            }
+            else {
+              edge.sendToSrc((0, 1))
+            }
+          }
+
+          // Get the first node once as well
+          if (!askedFirstVertex) {
+            val creature = store.value.get(edge.srcAttr)
+            if (creature.isAlive()) {
+              edge.sendToSrc((1, 0))
+            }
+            else { // So we at least always have a value. Just in case...
+              edge.sendToSrc((0, 0))
+            }
+
+            askedFirstVertex = true
+          }
+        }
+      },
+      (a, b) => (a._1 + b._1, a._2 + b._2)
+    ).collect().head
+
+    val alliesAlive  = (teamAliveCount._2._1 != 0)
+    val enemiesAlive = (teamAliveCount._2._2 != 0)
+
+    if (alliesAlive && enemiesAlive) {
+      return 0
+    }
+    else if (alliesAlive) {
+      return 1
+    }
+    else if (enemiesAlive) {
+      return -1
+    }
+    else {
+      throw new Exception("A ancient multi-dimensional multicolor dragon has appeared! Run for your life!")
+    }
   }
 }
