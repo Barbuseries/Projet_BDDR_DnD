@@ -7,19 +7,18 @@ class Team () {
   var members: ArrayBuffer[Int] = ArrayBuffer.empty[Int]
 
   def add(creatureTemplate: Creature, count : Int = 1): Unit = {
-    creatureTemplate.init()
-
     println(creatureTemplate.name)
-    println("initiative", creatureTemplate.initiative)
-    println("health", creatureTemplate.health)
-    println("armor", creatureTemplate.armor)
 
+    // TODO: Now that stats are not queried from a website,
+    // instanciating a new object is not a probleme anymore.
     for (i <- 0 until count - 1) {
       var creature: Creature = creatureTemplate.bulldozerCopy()
+      creature.init()
 
       members += CreatureStore.register(creature)
     }
 
+    creatureTemplate.init()
     members += CreatureStore.register(creatureTemplate)
   }
 

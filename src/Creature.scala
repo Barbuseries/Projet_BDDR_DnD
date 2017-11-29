@@ -7,17 +7,26 @@ import org.jsoup.nodes.Document
 
 import scala.collection.mutable.ArrayBuffer
 
-abstract class Creature(val name : String, val url: String) extends Serializable {
+abstract class Creature(val name : String) extends Serializable {
   var initiative: Int = 0
-  // TODO: Add max hp
+
+  var healthFormula: Formula = _
+  var maxHealth: Int = 0
   var health: Int = 0
 
   var armor: Int = 0
 
+  // TODO: This is only set for the solar (and maybe other angels),
+  // does it really belong here?
+  var regeneration: Int = 0
+
   var allAttacks: ArrayBuffer[Attack] = ArrayBuffer.empty[Attack]
 
   def init(): Unit = {
-    loadFromUrl(url)
+    assert(healthFormula != null)
+
+    maxHealth = healthFormula.compute()
+    health = maxHealth
   }
 
   // Because copy and clone do not work as I would like...
@@ -37,6 +46,9 @@ abstract class Creature(val name : String, val url: String) extends Serializable
   def play(id: VertexId, graph: Graph[Int, Int], store: Broadcast[CreatureStore.type]) : Unit = {
     println(s"$name ($health) is playing...")
     var played = false
+
+    regenerate()
+
     // TODO (way later): Ask allies if they need anything
 
     // TODO: Change to use a custom strength evaluation function
@@ -58,10 +70,25 @@ abstract class Creature(val name : String, val url: String) extends Serializable
     return health > 0
   }
 
-  def takeDamages(damages: Int): Unit = {
-    health -= damages
+  def takeDamages(amount: Int): Unit = {
+    // TODO: Special message if we happen to have amount == 0?
+    // (This is why there is this assert, in case it _does_
+    // happen and I forgot to do it.
+    assert(amount > 0)
+    health -= amount
 
     if (health < 0) health = 0
+  }
+
+  def heal(amount: Int): Unit = {
+    // TODO: Special message if we happen to have amount == 0?
+    // (This is why there is this assert, in case it _does_
+    // happen and I forgot to do it.
+    assert(amount > 0)
+
+    health += amount
+
+    if (health > maxHealth) health = maxHealth
   }
 
   def attack(creature: Creature): Boolean = {
@@ -77,6 +104,18 @@ abstract class Creature(val name : String, val url: String) extends Serializable
     return true
   }
 
+  def regenerate(): Unit = {
+    if ((health != maxHealth) && (regeneration != 0)) {
+      println(s"\t${Console.GREEN}${name} regenerates ${regeneration} hp.${Console.RESET}")
+      heal(regeneration)
+    }
+  }
+
+  def getHealthP(): Float = {
+    val result = health / maxHealth
+    return health
+  }
+
   private def findWeakestEnemy(id: VertexId, graph: Graph[Int, Int], store: Broadcast[CreatureStore.type]) : (VertexId, Int) = {
     val tempResult = graph.aggregateMessages[(VertexId, Int, Int)](
       edge => {
@@ -84,7 +123,7 @@ abstract class Creature(val name : String, val url: String) extends Serializable
 
         // NOTE: We could check for ((edge.srcId == id) || (edge.dstId == id))
         // if we use a directed graph representation (we which do), with one edge between each vertex
-        // (currently, there are two (one for each direction because we want an undirected graph).
+        // (currently, there are two (one for each direction because we want an undirected graph)).
         if ((edge.srcId == id) && isEnemy) {
           val key = edge.dstAttr
           val creature = store.value.get(key)
@@ -108,30 +147,6 @@ abstract class Creature(val name : String, val url: String) extends Serializable
     return (result._1, result._2)
   }
 
-  private def getStat(doc: Document, stat: String, p : String = ""): Int = {
-    var element = doc.select(s"p:contains($stat )").first().text()
-
-    val pattern = raw""".*$stat $p(\d+).*""".r
-    val pattern(result) = element
-
-    return result.toInt
-  }
-
-  private def getInitiative(doc: Document): Int = {
-    var result = getStat(doc, "Init", raw"\+")
-    return result
-  }
-
-  private def getHealth(doc: Document): Int = {
-    var result = getStat(doc, "hp")
-    return result
-  }
-
-  private def getArmor(doc: Document): Int = {
-    var result = getStat(doc, "AC")
-    return result
-  }
-
   private def getDoc(url: String): Document = {
     try {
       val doc = Jsoup.connect(url).get()
@@ -143,42 +158,49 @@ abstract class Creature(val name : String, val url: String) extends Serializable
       case e: Exception => { println(e); return null }
     }
   }
-
-  protected def loadFromUrl(url : String): Unit = {
-    var doc = getDoc(url)
-
-    initiative = getInitiative(doc)
-    health = getHealth(doc)
-    armor = getArmor(doc)
-  }
 }
 
 object Bestiary {
-  case class Solar() extends Creature("Solar",
-    "http://www.d20pfsrd.com/bestiary/monster-listings/outsiders/angel/solar") {
+  case class Solar() extends Creature("Solar") {
+    healthFormula = new Formula(22, Dice.d10, 242)
+
+    initiative = 9
+    armor = 44
+    regeneration = 15
+
     // TODO: Range attacks
     allAttacks += DancingGreatSword
     allAttacks += Slam
   }
 
-  case class WorgRider() extends Creature("Worg Rider",
-    "http://www.d20pfsrd.com/bestiary/npc-s/npc-1/orc-worg-rider/") {
+  case class WorgRider() extends Creature("Worg Rider") {
+    healthFormula = new Formula(2, Dice.d10, 2)
+
+    initiative = 2
+    armor = 18
+
     // TODO: Range attacks
     allAttacks += MWKBattleAxe
   }
 
-  case class Warlord() extends Creature("Warlord",
-    "http://www.d20pfsrd.com/bestiary/npc-s/npc-12/brutal-warlord-half-orc-fighter-13/") {
+  case class Warlord() extends Creature("Warlord") {
+    healthFormula = new Formula(13, Dice.d10, 65)
+
+    initiative = 2
+    armor = 27
 
     // TODO: Range attacks
     allAttacks += ViciousFlail
     allAttacks += LionShield
   }
 
-  case class BarbaresOrc() extends Creature("Barbares Orc",
-    "http://www.d20pfsrd.com/bestiary/npc-s/npc-10/double-axe-fury-half-orc-barbarian-11/") {
-    // TODO: Range attacks
+  case class BarbaresOrc() extends Creature("Barbares Orc") {
+    healthFormula = new Formula(11, Dice.d12, 65)
 
+    initiative = 4
+    armor = 17
+
+    // TODO: Range attacks
     allAttacks += OrcDoubleAxe
     allAttacks += OrcDoubleAxe2
     allAttacks += Bite

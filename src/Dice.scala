@@ -25,5 +25,6 @@ object Dice {
   case object d6  extends Dice(6)
   case object d8  extends Dice(8)
   case object d10 extends Dice(10)
+  case object d12 extends Dice(12)
   case object d20 extends Dice(20)
 }

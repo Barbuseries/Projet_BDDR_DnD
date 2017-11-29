@@ -2,33 +2,8 @@ import scala.collection.mutable.ArrayBuffer
 
 // TODO: Take into account the creature type when computing the damages.
 abstract case class Attack(name: String) extends Serializable {
-  protected class DamageFormula(diceCount: Int, dice: Dice, baseDamage: Int) extends Serializable {
-    def compute(isCritical: Boolean = false): Int = {
-      var result = baseDamage
-
-      var totalDiceCount = diceCount
-      if (isCritical) totalDiceCount *= 2
-
-      for (i <- 0 until totalDiceCount) {
-        result += dice.roll()
-      }
-
-      return result
-    }
-
-    def computeMin(): Int = {
-      var result = diceCount * dice.min() + baseDamage
-      return result
-    }
-
-    def computeMax(): Int = {
-      var result = diceCount * dice.max() + baseDamage
-      return result
-    }
-  }
-
   var allStrikes: ArrayBuffer[Int] = ArrayBuffer.empty[Int]
-  var damageFormula: DamageFormula = _
+  var damageFormula: Formula = _
 
   def describe(a: Creature, d: Creature): String
 
@@ -100,7 +75,7 @@ abstract case class Attack(name: String) extends Serializable {
 // Solar
 object DancingGreatSword extends Attack("+5 dancing greatsword") {
   allStrikes = ArrayBuffer[Int](35, 30, 25, 20)
-  damageFormula = new DamageFormula(3, Dice.d6, 18)
+  damageFormula = new Formula(3, Dice.d6, 18)
 
   override def describe(a: Creature, d: Creature): String = {
     val allBodyParts = Array[String]("arm", "leg", "torso", "back",
@@ -113,7 +88,7 @@ object DancingGreatSword extends Attack("+5 dancing greatsword") {
 
 object Slam extends Attack("Slam") {
   allStrikes = ArrayBuffer[Int](30)
-  damageFormula = new DamageFormula(2, Dice.d8, 13)
+  damageFormula = new Formula(2, Dice.d8, 13)
 
   override def describe(a: Creature, d: Creature): String = {
     return s"${a.name} slamed into ${d.name}"
@@ -123,7 +98,7 @@ object Slam extends Attack("Slam") {
 // Worg Rider
 object MWKBattleAxe extends Attack("mwk battleaxe") {
   allStrikes = ArrayBuffer[Int](6)
-  damageFormula = new DamageFormula(1, Dice.d8, 2)
+  damageFormula = new Formula(1, Dice.d8, 2)
 
   override def describe(a: Creature, d: Creature): String = {
     return s"A swift swing from ${a.name}'s ${name} into ${d.name}"
@@ -133,7 +108,7 @@ object MWKBattleAxe extends Attack("mwk battleaxe") {
 // Warlord
 object ViciousFlail extends Attack("+1 vicious flail") {
   allStrikes = ArrayBuffer[Int](20, 15, 10)
-  damageFormula = new DamageFormula(1, Dice.d8, 10)
+  damageFormula = new Formula(1, Dice.d8, 10)
 
   override def describe(a: Creature, d: Creature): String = {
     return s"A powerful swing from ${a.name}'s ${name} into ${d.name}"
@@ -142,7 +117,7 @@ object ViciousFlail extends Attack("+1 vicious flail") {
 
 object LionShield extends Attack("lion's shield") {
   allStrikes = ArrayBuffer[Int](23)
-  damageFormula = new DamageFormula(1, Dice.d4, 6)
+  damageFormula = new Formula(1, Dice.d4, 6)
 
   override def describe(a: Creature, d: Creature): String = {
     return s"${a.name} bashes ${d.name}"
@@ -152,7 +127,7 @@ object LionShield extends Attack("lion's shield") {
 // Barbares Orc
 object OrcDoubleAxe extends Attack("+1 orc double axe") {
   allStrikes = ArrayBuffer[Int](19, 14, 9)
-  damageFormula = new DamageFormula(1, Dice.d8, 10)
+  damageFormula = new Formula(1, Dice.d8, 10)
 
   override def describe(a: Creature, d: Creature): String = {
     return s"A swift swing from ${a.name}'s ${name} into ${d.name}"
@@ -161,7 +136,7 @@ object OrcDoubleAxe extends Attack("+1 orc double axe") {
 
 object OrcDoubleAxe2 extends Attack("+1 orc double axe") {
   allStrikes = ArrayBuffer[Int](17, 12)
-  damageFormula = new DamageFormula(1, Dice.d8, 7)
+  damageFormula = new Formula(1, Dice.d8, 7)
 
   override def describe(a: Creature, d: Creature): String = {
     return s"A swift swing from ${a.name}'s ${name} into ${d.name}"
@@ -170,7 +145,7 @@ object OrcDoubleAxe2 extends Attack("+1 orc double axe") {
 
 object Bite extends Attack("bite") {
   allStrikes = ArrayBuffer[Int](12)
-  damageFormula = new DamageFormula(1, Dice.d4, 3)
+  damageFormula = new Formula(1, Dice.d4, 3)
 
   override def describe(a: Creature, d: Creature): String = {
     return s"${a.name}'bites ${d.name}"
