@@ -1,4 +1,4 @@
-import Bestiary.{BarbaresOrc, Solar, Warlord, WorgRider}
+import Bestiary._
 import org.apache.spark.broadcast.Broadcast
 import org.apache.spark.graphx.{Edge, Graph}
 import org.apache.spark.{SparkConf, SparkContext}
@@ -45,19 +45,13 @@ object Main {
 
   def buildFightTwo(allies: Team, enemies: Team): Unit = {
     allies.add(Solar())
-    // TODO: Change to Planetar()
-    allies.add(Solar(), 2)
-    // TODO: Change to Movanic Deva()
-    allies.add(Solar(), 2)
-    // TODO: Change to Astral Deva()
-    allies.add(Solar(), 5)
+    allies.add(Planetar(), 2)
+    allies.add(MovanicDeva(), 2)
+    allies.add(AstralDeva(), 5)
 
-    // TODO: Change to GreenGreatWyrmDragon
-    enemies.add(Warlord())
-    // TODO: Change to OrcBarbarian()
-    enemies.add(WorgRider(), 200)
-    // TODO: Change to AngelSlayer()
-    enemies.add(BarbaresOrc(), 10)
+    enemies.add(GreenGreatWyrmDragon())
+    enemies.add(OrcBarbarian(), 200)
+    enemies.add(AngelSlayer(), 10)
   }
 
   def main(args: Array[String]) {
@@ -73,8 +67,8 @@ object Main {
     var allies = new Team()
     var enemies = new Team()
 
-    buildFightOne(allies, enemies)
-    //buildFightTwo(allies, enemies)
+    //buildFightOne(allies, enemies)
+    buildFightTwo(allies, enemies)
 
     val graph = createGraph(sc, allies, enemies)
 

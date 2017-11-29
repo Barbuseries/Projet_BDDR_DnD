@@ -159,6 +159,61 @@ object Bestiary {
     allAttacks += Slam
   }
 
+  case class Planetar() extends Creature("Planetar") {
+    healthFormula = new Formula(17, Dice.d10, 136)
+
+    initiative = 8
+    armor = 32
+    regeneration = 10
+
+    // TODO: Attacks
+  }
+
+  case class MovanicDeva() extends Creature("Movanic Deva") {
+    healthFormula = new Formula(12, Dice.d10, 60)
+
+    initiative = 7
+    armor = 24
+
+    // TODO: Attacks
+  }
+
+  case class AstralDeva() extends Creature("Astral Deva") {
+    healthFormula = new Formula(15, Dice.d10, 90)
+
+    initiative = 8
+    armor = 29
+
+    // TODO: Attacks
+  }
+
+  case class GreenGreatWyrmDragon() extends Creature("Green Great Wyrm Dragon") {
+    healthFormula = new Formula(27, Dice.d12, 216)
+
+    initiative = 2
+    armor = 37
+
+    // TODO: Attacks
+  }
+
+  case class OrcBarbarian() extends Creature("Orc Barbarian") {
+    healthFormula = new Formula(4, Dice.d12, 16)
+
+    initiative = 1
+    armor = 15
+
+    // TODO: Attacks
+  }
+
+  case class AngelSlayer() extends Creature("Angel Slayer") {
+    healthFormula = new Formula(15, Dice.d10, 25)
+
+    initiative = 7
+    armor = 26
+
+    // TODO: Attacks
+  }
+
   case class WorgRider() extends Creature("Worg Rider") {
     healthFormula = new Formula(2, Dice.d10, 2)
 
