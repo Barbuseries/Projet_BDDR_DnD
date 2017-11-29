@@ -2,8 +2,6 @@ import java.io.{FileInputStream, FileOutputStream, ObjectInputStream, ObjectOutp
 
 import org.apache.spark.broadcast.Broadcast
 import org.apache.spark.graphx.{Graph, VertexId}
-import org.jsoup.{HttpStatusException, Jsoup}
-import org.jsoup.nodes.Document
 
 import scala.collection.mutable.ArrayBuffer
 
@@ -92,7 +90,7 @@ abstract class Creature(val name : String) extends Serializable {
   }
 
   def attack(creature: Creature): Boolean = {
-    val validAttacks = allAttacks.filter(_.canHit(creature))
+    val validAttacks = allAttacks.filter(_.canHit(this, creature))
 
     if (validAttacks.length == 0) return false
 
@@ -145,18 +143,6 @@ abstract class Creature(val name : String) extends Serializable {
     // Return just the vertex id and the creature key
     val result = resultAggregate(0)._2
     return (result._1, result._2)
-  }
-
-  private def getDoc(url: String): Document = {
-    try {
-      val doc = Jsoup.connect(url).get()
-
-      return doc
-    }
-    catch {
-      case hse: HttpStatusException => { println(s"invalid url: $url"); return null }
-      case e: Exception => { println(e); return null }
-    }
   }
 }
 

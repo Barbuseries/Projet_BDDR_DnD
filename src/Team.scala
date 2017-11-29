@@ -7,10 +7,10 @@ class Team () {
   var members: ArrayBuffer[Int] = ArrayBuffer.empty[Int]
 
   def add(creatureTemplate: Creature, count : Int = 1): Unit = {
-    println(creatureTemplate.name)
+    println(s"${creatureTemplate.name} (${count})")
 
     // TODO: Now that stats are not queried from a website,
-    // instanciating a new object is not a probleme anymore.
+    // instantiating a new object is not a problem anymore.
     for (i <- 0 until count - 1) {
       var creature: Creature = creatureTemplate.bulldozerCopy()
       creature.init()

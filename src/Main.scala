@@ -1,11 +1,12 @@
 import Bestiary.{BarbaresOrc, Solar, Warlord, WorgRider}
 import org.apache.spark.broadcast.Broadcast
-import org.apache.spark.graphx.{Edge, Graph, VertexId}
-import org.apache.spark.{SparkConf, SparkContext, graphx}
+import org.apache.spark.graphx.{Edge, Graph}
+import org.apache.spark.{SparkConf, SparkContext}
 
 import scala.collection.mutable.ArrayBuffer
 
 object Main {
+  // TODO: To implement invocation spells (Summon 7), there needs to be a way to add vertices to the graph.
   def createGraph(sc: SparkContext, allies : Team, enemies : Team): Graph[Int, Int] = {
     val allies_len = allies.members.length
     val enemies_len = enemies.members.length
@@ -18,7 +19,7 @@ object Main {
     val allyEdges = allies.edges()
     val enemyEdges = enemies.edges().map(e => Edge(offset + e.srcId, offset + e.dstId, e.attr))
     // Joins allies and enemies
-    val inBetweenEdges = (for (i <- 0 until allies_len; j <- 0 until enemies_len) yield Edge(i.toLong, (offset + j).toLong, 0))
+    val inBetweenEdges = for (i <- 0 until allies_len; j <- 0 until enemies_len) yield Edge(i.toLong, (offset + j).toLong, 0)
 
 
     // As GraphX only uses directional graphs, add edges in the other direction
@@ -34,6 +35,31 @@ object Main {
     return edges.map(e => Edge(e.dstId, e.srcId, e.attr))
   }
 
+  def buildFightOne(allies: Team, enemies: Team): Unit = {
+    allies.add(Solar())
+
+    enemies.add(WorgRider(), 9)
+    enemies.add(Warlord())
+    enemies.add(BarbaresOrc(), 4)
+  }
+
+  def buildFightTwo(allies: Team, enemies: Team): Unit = {
+    allies.add(Solar())
+    // TODO: Change to Planetar()
+    allies.add(Solar(), 2)
+    // TODO: Change to Movanic Deva()
+    allies.add(Solar(), 2)
+    // TODO: Change to Astral Deva()
+    allies.add(Solar(), 5)
+
+    // TODO: Change to GreenGreatWyrmDragon
+    enemies.add(Warlord())
+    // TODO: Change to OrcBarbarian()
+    enemies.add(WorgRider(), 200)
+    // TODO: Change to AngelSlayer()
+    enemies.add(BarbaresOrc(), 10)
+  }
+
   def main(args: Array[String]) {
     val conf = new SparkConf()
       .setAppName("toto")
@@ -44,14 +70,11 @@ object Main {
 
     var store = sc.broadcast(CreatureStore)
 
-    // TODO: To make it simple to construct, create classes to work as 'aliases'.
     var allies = new Team()
-    allies.add(Solar())
-
     var enemies = new Team()
-    enemies.add(WorgRider(), 9)
-    enemies.add(Warlord())
-    enemies.add(BarbaresOrc(), 4)
+
+    buildFightOne(allies, enemies)
+    //buildFightTwo(allies, enemies)
 
     val graph = createGraph(sc, allies, enemies)
 
@@ -62,7 +85,7 @@ object Main {
     while (!done) {
       // FIXME: This is used to iterate over all elements in order (without having to keep an index around).
       //  There may (should) be a better way to do this (having to filter is bad), but I don't know it yet.
-      orderList.map(id => {
+      orderList.foreach(id => {
         var key = graph.vertices.filter(_._1 == id).first()._2
         var c = store.value.get(key)
 

@@ -1,5 +1,7 @@
 import scala.collection.mutable.ArrayBuffer
 
+// TODO: Implement spells (there may be a common structure with an attack,
+// but they can affect allies and/or multiple creatures).
 // TODO: Take into account the creature type when computing the damages.
 abstract case class Attack(name: String) extends Serializable {
   var allStrikes: ArrayBuffer[Int] = ArrayBuffer.empty[Int]
@@ -14,7 +16,7 @@ abstract case class Attack(name: String) extends Serializable {
 
     println(s"\t${attacker.name} targets ${defender.name}...")
 
-    allStrikes.map(s => {
+    allStrikes.foreach(s => {
       if (defender.isAlive()) {
         val roll = Dice.d20.roll()
 
@@ -67,7 +69,7 @@ abstract case class Attack(name: String) extends Serializable {
   }
 
   // TODO: Add a min/max reach attribute (to test if this attack can be used)
-  def canHit(creature: Creature): Boolean = {
+  def canHit(attacker: Creature, defender: Creature): Boolean = {
     return true
   }
 }

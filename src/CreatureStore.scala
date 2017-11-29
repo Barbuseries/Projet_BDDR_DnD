@@ -1,6 +1,6 @@
 import scala.collection.mutable.ArrayBuffer
 
-// TODO/NOTE: This is intented to store each creature separately
+// TODO/NOTE: This is intended to store each creature separately
 // from the graph itself (because the latter is immutable).
 //
 // Therefore, each vertex of the graph only has a key into this storage
