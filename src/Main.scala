@@ -57,7 +57,7 @@ object Main {
   def main(args: Array[String]) {
     val conf = new SparkConf()
       .setAppName("toto")
-      .setMaster("local[1]")
+      .setMaster("local[4]")
 
     val sc = new SparkContext(conf)
     sc.setLogLevel("ERROR")

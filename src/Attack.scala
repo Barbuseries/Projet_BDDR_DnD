@@ -1,10 +1,13 @@
-import OrcDoubleAxe2.name
+import TailSlap.name
 
 import scala.collection.mutable.ArrayBuffer
 
 // TODO: Implement spells (there may be a common structure with an attack,
 // but they can affect allies and/or multiple creatures).
 // TODO: Take into account the creature type when computing the damages.
+// TODO: It seems that unused strikes can be carried over other enemies
+//  (after each strike, the defender must updated).
+//  (P.S: The attacker may even be able to move in between each strike)
 abstract case class Attack(name: String) extends Serializable {
   var allStrikes: ArrayBuffer[Int] = ArrayBuffer.empty[Int]
   var damageFormula: Formula = _
@@ -54,6 +57,8 @@ abstract case class Attack(name: String) extends Serializable {
 
             if (!defender.isAlive()) {
               println(s"${Console.RED}\t${defender.name} was slained by ${attacker.name}!${Console.RESET}")
+              // TODO: See TODO above about unused strikes.
+              // This early-out will probably be removed.
               return total
             }
           }
@@ -88,27 +93,31 @@ class Bite(name: String = "bite") extends Attack(name) {
   }
 }
 
-// Solar
-object DancingGreatSword extends Attack("+5 dancing greatsword") {
-  allStrikes = ArrayBuffer[Int](35, 30, 25, 20)
-  damageFormula = new Formula(3, Dice.d6, 18)
-
+class Sword(name: String) extends Attack(name) {
   override def describe(a: Creature, d: Creature): String = {
     val allBodyParts = Array[String]("arm", "leg", "torso", "back",
-                                     "head", "shoulder", "thigh", "knee")
+      "head", "shoulder", "thigh", "knee")
     val randomPart = scala.util.Random.nextInt(allBodyParts.length)
 
     return s"${a.name} slashes ${d.name} right in the ${allBodyParts(randomPart)}"
   }
 }
 
-object Slam extends Attack("Slam") {
-  allStrikes = ArrayBuffer[Int](30)
-  damageFormula = new Formula(2, Dice.d8, 13)
-
+class Slam(name: String = "slam") extends Attack(name) {
   override def describe(a: Creature, d: Creature): String = {
     return s"${a.name} slamed into ${d.name}"
   }
+}
+
+// Solar
+object DancingGreatSword extends Sword("+5 dancing greatsword") {
+  allStrikes = ArrayBuffer[Int](35, 30, 25, 20)
+  damageFormula = new Formula(3, Dice.d6, 18)
+}
+
+object SolarSlam extends Slam {
+  allStrikes = ArrayBuffer[Int](30)
+  damageFormula = new Formula(2, Dice.d8, 13)
 }
 
 // Worg Rider
@@ -193,4 +202,47 @@ object TailSlap extends Attack("tail slap") {
   override def describe(a: Creature, d: Creature): String = {
     return s"${a.name} ${name}s ${d.name}"
   }
+}
+
+// Planetar
+object HolyGreatSword extends Sword("+3 holy greatsword") {
+  allStrikes = ArrayBuffer[Int](27, 22, 17)
+  damageFormula = new Formula(3, Dice.d6, 15)
+}
+
+object PlanetarSlam extends Slam {
+  allStrikes = ArrayBuffer[Int](24)
+  damageFormula = new Formula(2, Dice.d8, 12)
+}
+
+// Movanic Deva
+object FlamingGreatSword extends Sword("+1 flaming greatsword") {
+  allStrikes = ArrayBuffer[Int](17, 12, 7)
+  damageFormula = new Formula(2, Dice.d6, 7) // TODO: It says: 'plus 1d6 fire'
+}
+
+// Astral Deva
+object DisruptingWarhammer extends Attack("+2 disrupting warhammer") {
+  allStrikes = ArrayBuffer[Int](26, 21, 16)
+  damageFormula = new Formula(1, Dice.d8, 14) // TODO: It says: 'plus stun'
+
+  override def describe(a: Creature, d: Creature): String = {
+    return s"${a.name} stomps ${d.name}"
+  }
+}
+
+object AstralSlam extends Slam {
+  allStrikes = ArrayBuffer[Int](23)
+  damageFormula = new Formula(1, Dice.d8, 12)
+}
+
+// Angel Slayer
+object DoubleAxe extends Axe("+1 good outsider-bane orc double axe") {
+  allStrikes = ArrayBuffer[Int](21, 16, 11)
+  damageFormula = new Formula(1, Dice.d8, 7)
+}
+
+object DoubleAxe2 extends Axe("+1 orc double axe") {
+  allStrikes = ArrayBuffer[Int](21, 16, 11)
+  damageFormula = new Formula(1, Dice.d8, 7)
 }

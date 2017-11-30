@@ -127,6 +127,7 @@ abstract class Creature(val name : String) extends Serializable {
           val creature = store.value.get(key)
 
           if (creature.isAlive()) {
+            // TODO: edge.dstId is not needed anymore
             edge.sendToSrc((edge.dstId, key, creature.health))
           }
         }
@@ -156,7 +157,7 @@ object Bestiary {
 
     // TODO: Range attacks
     allAttacks += DancingGreatSword
-    allAttacks += Slam
+    allAttacks += SolarSlam
   }
 
   case class Planetar() extends Creature("Planetar") {
@@ -166,7 +167,9 @@ object Bestiary {
     armor = 32
     regeneration = 10
 
-    // TODO: Attacks
+    // TODO: Range attacks
+    allAttacks += HolyGreatSword
+    allAttacks += PlanetarSlam
   }
 
   case class MovanicDeva() extends Creature("Movanic Deva") {
@@ -175,7 +178,8 @@ object Bestiary {
     initiative = 7
     armor = 24
 
-    // TODO: Attacks
+    // TODO: Ranged attacks
+    allAttacks += FlamingGreatSword
   }
 
   case class AstralDeva() extends Creature("Astral Deva") {
@@ -184,7 +188,9 @@ object Bestiary {
     initiative = 8
     armor = 29
 
-    // TODO: Attacks
+    // TODO: Ranged attacks
+    allAttacks += DisruptingWarhammer
+    allAttacks += AstralSlam
   }
 
   case class GreenGreatWyrmDragon() extends Creature("Green Great Wyrm Dragon") {
@@ -216,7 +222,9 @@ object Bestiary {
     initiative = 7
     armor = 26
 
-    // TODO: Attacks
+    // TODO: Ranged attacks
+    allAttacks += DoubleAxe
+    allAttacks += DoubleAxe2
   }
 
   case class WorgRider() extends Creature("Worg Rider") {

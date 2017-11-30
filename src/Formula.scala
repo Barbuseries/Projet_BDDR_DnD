@@ -1,6 +1,6 @@
-class Formula(diceCount: Int, dice: Dice, baseDamage: Int) extends Serializable {
+class Formula(diceCount: Int, dice: Dice, base: Int) extends Serializable {
   def compute(isCritical: Boolean = false): Int = {
-    var result = baseDamage
+    var result = base
 
     var totalDiceCount = diceCount
     if (isCritical) totalDiceCount *= 2
@@ -13,12 +13,12 @@ class Formula(diceCount: Int, dice: Dice, baseDamage: Int) extends Serializable 
   }
 
   def computeMin(): Int = {
-    var result = diceCount * dice.min() + baseDamage
+    var result = diceCount * dice.min() + base
     return result
   }
 
   def computeMax(): Int = {
-    var result = diceCount * dice.max() + baseDamage
+    var result = diceCount * dice.max() + base
     return result
   }
 }
