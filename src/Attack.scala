@@ -1,4 +1,6 @@
 import TailSlap.name
+import org.apache.spark.broadcast.Broadcast
+import org.apache.spark.graphx.{Graph, VertexId}
 
 import scala.collection.mutable.ArrayBuffer
 
@@ -14,61 +16,83 @@ abstract case class Attack(name: String) extends Serializable {
 
   def describe(a: Creature, d: Creature): String
 
-  def hit(attacker: Creature, defender: Creature): Int = {
+  def hit(attacker: Creature,
+          initialCreature: Creature = null,
+          targetSelector: () => Creature = null): Int = {
     assert(damageFormula != null)
 
     var total = 0
+    var defender = initialCreature
 
-    println(s"\t${attacker.name} targets ${defender.name}...")
+    assert((initialCreature != null) || (targetSelector != null))
 
     allStrikes.foreach(s => {
-      if (defender.isAlive()) {
-        val roll = Dice.d20.roll()
+      if (defender == null)
+        defender = targetSelector()
 
-        if (roll != 1) {
-          var pierceDefence = false
-          var isCritical = false
+      if (defender == null)
+         return total
 
-          if (roll == 20) {
-            pierceDefence = true
+      assert(defender.isAlive())
 
-            if ((Dice.d20.roll() + s) > defender.armor) {
-              isCritical = true
+      println(s"\t${attacker.name} targets ${defender.name}...")
 
-              println(s"\t${Console.BLUE}Critical hit!${Console.RESET}")
-            }
-            else {
-              println(s"\t${attacker.name} pierced ${defender.name}'s defenses!")
-            }
+      val roll = Dice.d20.roll()
+
+      if (roll != 1) {
+        var pierceDefence = false
+        var isCritical = false
+
+        if (roll == 20) {
+          pierceDefence = true
+
+          if ((Dice.d20.roll() + s) > defender.armor) {
+            isCritical = true
+
+            println(s"\t${Console.BLUE}Critical hit!${Console.RESET}")
           }
           else {
-            val totalArmorBreak = roll + s;
-            pierceDefence = (totalArmorBreak > defender.armor)
-          }
-
-          if (pierceDefence) {
-            var damages = damageFormula.compute(isCritical)
-            val description = describe(attacker, defender) + s" for ${damages} hp!"
-
-            defender.takeDamages(damages)
-            println(s"\t$description")
-
-            total += damages
-
-            if (!defender.isAlive()) {
-              println(s"${Console.RED}\t${defender.name} was slained by ${attacker.name}!${Console.RESET}")
-              // TODO: See TODO above about unused strikes.
-              // This early-out will probably be removed.
-              return total
-            }
-          }
-          else {
-            println(s"\t${defender.name} blocked the attack!")
+            println(s"\t${attacker.name} pierced ${defender.name}'s defenses!")
           }
         }
         else {
-          println(s"\t${attacker.name} misses miserably...")
+          val totalArmorBreak = roll + s;
+          pierceDefence = (totalArmorBreak > defender.armor)
         }
+
+        if (pierceDefence) {
+          var fullDamages = damageFormula.compute(isCritical)
+
+          var damages = fullDamages - defender.damageReduction
+
+          var description = describe(attacker, defender)
+
+          if (damages > 0) {
+            description += s" for ${damages} (${Console.RED}${fullDamages}${Console.RESET} - ${Console.BLUE}${defender.damageReduction}${Console.RESET}) hp!"
+
+            defender.takeDamages(damages)
+            total += damages
+          }
+          else
+            description += s"... but it bounced off!"
+
+          println(s"\t$description")
+
+          if (!defender.isAlive()) {
+            println(s"${Console.RED}\t${defender.name} was slained by ${attacker.name}!${Console.RESET}")
+          }
+        }
+        else {
+          println(s"\t${defender.name} blocked the attack!")
+        }
+      }
+      else {
+        println(s"\t${attacker.name} misses miserably...")
+      }
+
+      // Reset the defender after each strike (if the creature is non constant)
+      if (targetSelector != null) {
+        defender = null
       }
     })
 

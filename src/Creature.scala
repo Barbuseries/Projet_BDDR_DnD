@@ -14,6 +14,10 @@ abstract class Creature(val name : String) extends Serializable {
 
   var armor: Int = 0
 
+  // TODO: Look at what breaks damageReduction
+  var damageReduction: Int = 0
+  var spellReduction: Int = 0
+
   // TODO: This is only set for the solar (and maybe other angels),
   // does it really belong here?
   var regeneration: Int = 0
@@ -51,12 +55,9 @@ abstract class Creature(val name : String) extends Serializable {
 
     // TODO: Change to use a custom strength evaluation function
     // Ask enemies what their life is. Attack the one with the lowest health
-    val result = findWeakestEnemy(id, graph, store)
+    val strategy = () => findWeakestEnemy(id, graph, store)
 
-    if (result._2 != -1) {
-      played = attack(store.value.get(result._2))
-    }
-
+    played = attack(strategy)
 
 
     if (!played) {
@@ -89,15 +90,17 @@ abstract class Creature(val name : String) extends Serializable {
     if (health > maxHealth) health = maxHealth
   }
 
-  def attack(creature: Creature): Boolean = {
-    val validAttacks = allAttacks.filter(_.canHit(this, creature))
+  def attack(targetSelector: () => Creature): Boolean = {
+    val firstCreature = targetSelector()
+    if (firstCreature == null) return false
 
+    val validAttacks = allAttacks.filter(_.canHit(this, firstCreature))
     if (validAttacks.length == 0) return false
 
     // TODO: Can be changed to rank based on min/max/average damages
     val choosenAttack = validAttacks(scala.util.Random.nextInt(validAttacks.length))
 
-    var damages = choosenAttack.hit(this, creature)
+    var damages = choosenAttack.hit(this, firstCreature, targetSelector)
 
     return true
   }
@@ -114,8 +117,8 @@ abstract class Creature(val name : String) extends Serializable {
     return health
   }
 
-  private def findWeakestEnemy(id: VertexId, graph: Graph[Int, Int], store: Broadcast[CreatureStore.type]) : (VertexId, Int) = {
-    val tempResult = graph.aggregateMessages[(VertexId, Int, Int)](
+  private def findWeakestEnemy(id: VertexId, graph: Graph[Int, Int], store: Broadcast[CreatureStore.type])() : Creature = {
+    val tempResult = graph.aggregateMessages[(Int, Int)](
       edge => {
         val isEnemy = edge.toEdgeTriplet.attr == 0
 
@@ -127,23 +130,21 @@ abstract class Creature(val name : String) extends Serializable {
           val creature = store.value.get(key)
 
           if (creature.isAlive()) {
-            // TODO: edge.dstId is not needed anymore
-            edge.sendToSrc((edge.dstId, key, creature.health))
+            edge.sendToSrc((key, creature.health))
           }
         }
       },
       // min health
-      (a, b)  => if (b._3 > a._3) a else b)
+      (a, b)  => if (b._2 > a._2) a else b)
 
     val resultAggregate = tempResult.collect()
 
     if (resultAggregate.length == 0) {
-      return (-1, -1)
+      return null
     }
 
-    // Return just the vertex id and the creature key
     val result = resultAggregate(0)._2
-    return (result._1, result._2)
+    return store.value.get(result._1)
   }
 }
 
@@ -154,6 +155,9 @@ object Bestiary {
     initiative = 9
     armor = 44
     regeneration = 15
+
+    damageReduction = 15
+    spellReduction = 34
 
     // TODO: Range attacks
     allAttacks += DancingGreatSword
@@ -167,6 +171,9 @@ object Bestiary {
     armor = 32
     regeneration = 10
 
+    damageReduction = 10
+    spellReduction = 27
+
     // TODO: Range attacks
     allAttacks += HolyGreatSword
     allAttacks += PlanetarSlam
@@ -178,6 +185,9 @@ object Bestiary {
     initiative = 7
     armor = 24
 
+    damageReduction = 10
+    spellReduction = 21
+
     // TODO: Ranged attacks
     allAttacks += FlamingGreatSword
   }
@@ -187,6 +197,9 @@ object Bestiary {
 
     initiative = 8
     armor = 29
+
+    damageReduction = 10
+    spellReduction = 25
 
     // TODO: Ranged attacks
     allAttacks += DisruptingWarhammer
@@ -198,6 +211,9 @@ object Bestiary {
 
     initiative = 2
     armor = 37
+
+    damageReduction = 20
+    spellReduction = 31
 
     // TODO: Ranged attacks
     allAttacks += DragonBite
@@ -253,6 +269,8 @@ object Bestiary {
 
     initiative = 4
     armor = 17
+
+    damageReduction = 3
 
     // TODO: Range attacks
     allAttacks += OrcDoubleAxe
