@@ -18,7 +18,7 @@ abstract case class Attack(name: String) extends Serializable {
 
   def hit(attacker: Creature,
           initialCreature: Creature = null,
-          targetSelector: () => Creature = null): Int = {
+          targetSelector: (Creature) => Creature = null): Int = {
     assert(damageFormula != null)
 
     var total = 0
@@ -26,9 +26,10 @@ abstract case class Attack(name: String) extends Serializable {
 
     assert((initialCreature != null) || (targetSelector != null))
 
+    var oldDefender = defender
     allStrikes.foreach(s => {
       if (defender == null)
-        defender = targetSelector()
+        defender = targetSelector(oldDefender)
 
       if (defender == null)
          return total
@@ -92,6 +93,11 @@ abstract case class Attack(name: String) extends Serializable {
 
       // Reset the defender after each strike (if the creature is non constant)
       if (targetSelector != null) {
+        if (defender.isAlive())
+          oldDefender = defender
+        else
+          oldDefender = null
+
         defender = null
       }
     })

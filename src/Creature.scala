@@ -55,7 +55,14 @@ abstract class Creature(val name : String) extends Serializable {
 
     // TODO: Change to use a custom strength evaluation function
     // Ask enemies what their life is. Attack the one with the lowest health
-    val strategy = () => findWeakestEnemy(id, graph, store)
+    val strategy = (previousTarget : Creature) => {
+      if (previousTarget != null) {
+        previousTarget
+      }
+      else {
+        findWeakestEnemy(id, graph, store)
+      }
+    }
 
     played = attack(strategy)
 
@@ -90,8 +97,8 @@ abstract class Creature(val name : String) extends Serializable {
     if (health > maxHealth) health = maxHealth
   }
 
-  def attack(targetSelector: () => Creature): Boolean = {
-    val firstCreature = targetSelector()
+  def attack(targetSelector: (Creature) => Creature): Boolean = {
+    val firstCreature = targetSelector(null)
     if (firstCreature == null) return false
 
     val validAttacks = allAttacks.filter(_.canHit(this, firstCreature))
