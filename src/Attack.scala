@@ -1,22 +1,11 @@
-import TailSlap.name
-import org.apache.spark.broadcast.Broadcast
-import org.apache.spark.graphx.{Graph, VertexId}
-
 import scala.collection.mutable.ArrayBuffer
 
-// TODO: Implement spells (there may be a common structure with an attack,
-// but they can affect allies and/or multiple creatures).
 // TODO: Take into account the creature type when computing the damages.
-// TODO: It seems that unused strikes can be carried over other enemies
-//  (after each strike, the defender must updated).
-//  (P.S: The attacker may even be able to move in between each strike)
-abstract case class Attack(name: String) extends Serializable {
+abstract case class Attack(name: String) extends Action[Creature] with Serializable {
   var allStrikes: ArrayBuffer[Int] = ArrayBuffer.empty[Int]
   var damageFormula: Formula = _
 
-  def describe(a: Creature, d: Creature): String
-
-  def hit(attacker: Creature,
+  override def apply(attacker: Creature,
           initialCreature: Creature = null,
           targetSelector: (Creature) => Creature = null): Int = {
     assert(damageFormula != null)
@@ -106,7 +95,7 @@ abstract case class Attack(name: String) extends Serializable {
   }
 
   // TODO: Add a min/max reach attribute (to test if this attack can be used)
-  def canHit(attacker: Creature, defender: Creature): Boolean = {
+  def canApply(attacker: Creature, defender: Creature): Boolean = {
     return true
   }
 }

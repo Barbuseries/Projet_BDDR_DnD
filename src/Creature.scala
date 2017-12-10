@@ -101,13 +101,13 @@ abstract class Creature(val name : String) extends Serializable {
     val firstCreature = targetSelector(null)
     if (firstCreature == null) return false
 
-    val validAttacks = allAttacks.filter(_.canHit(this, firstCreature))
+    val validAttacks = allAttacks.filter(_.canApply(this, firstCreature))
     if (validAttacks.length == 0) return false
 
     // TODO: Can be changed to rank based on min/max/average damages
     val choosenAttack = validAttacks(scala.util.Random.nextInt(validAttacks.length))
 
-    var damages = choosenAttack.hit(this, firstCreature, targetSelector)
+    var damages = choosenAttack.apply(this, firstCreature, targetSelector)
 
     return true
   }

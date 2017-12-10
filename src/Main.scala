@@ -67,8 +67,8 @@ object Main {
     var allies = new Team()
     var enemies = new Team()
 
-    //buildFightOne(allies, enemies)
-    buildFightTwo(allies, enemies)
+    buildFightOne(allies, enemies)
+    //buildFightTwo(allies, enemies)
 
     val graph = createGraph(sc, allies, enemies)
 
