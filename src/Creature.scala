@@ -23,6 +23,7 @@ abstract class Creature(val name : String) extends Serializable {
   var regeneration: Int = 0
 
   var allAttacks: ArrayBuffer[Attack] = ArrayBuffer.empty[Attack]
+  var allSpells: ArrayBuffer[Spell[_]] = ArrayBuffer.empty[Spell[_]]
 
   def init(): Unit = {
     assert(healthFormula != null)
@@ -45,16 +46,11 @@ abstract class Creature(val name : String) extends Serializable {
     return obj
   }
 
-  def play(id: VertexId, graph: Graph[Int, Int], store: Broadcast[CreatureStore.type]) : Unit = {
-    println(s"$name ($health) is playing...")
-    var played = false
-
-    regenerate()
-
+  protected def think(id: VertexId, graph: Graph[Int, Int], store: Broadcast[CreatureStore.type]): Boolean = {
     // TODO (way later): Ask allies if they need anything
+    if(healAllies(id, graph, store)) return true
 
     // TODO: Change to use a custom strength evaluation function
-    // Ask enemies what their life is. Attack the one with the lowest health
     val strategy = (previousTarget : Creature) => {
       if (previousTarget != null) {
         previousTarget
@@ -64,8 +60,18 @@ abstract class Creature(val name : String) extends Serializable {
       }
     }
 
-    played = attack(strategy)
+    if (attack(strategy)) return true
 
+    return false
+  }
+
+  def play(id: VertexId, graph: Graph[Int, Int], store: Broadcast[CreatureStore.type]) : Unit = {
+    println(s"$name ($health) is playing...")
+    var played = false
+
+    regenerate()
+
+    played = think(id, graph, store)
 
     if (!played) {
       println("\tBut can not do anything...")
@@ -112,6 +118,47 @@ abstract class Creature(val name : String) extends Serializable {
     return true
   }
 
+  protected def healAllies(id: VertexId, graph: Graph[Int, Int], store: Broadcast[CreatureStore.type]): Boolean = {
+    // TODO: Implement something based on either a spell type or a spell target (allies and or enemies)
+    val healingSpells = allSpells.filter(_.isInstanceOf[HealingSpell[_]])
+    if (healingSpells.length == 0) return false
+
+    val tempResult = graph.aggregateMessages[(Int, Float)](
+      edge => {
+        val isEnemy = edge.toEdgeTriplet.attr == 0
+
+        // See NOTE findWeakestEnemy
+        if ((edge.srcId == id) && !isEnemy) {
+          val key = edge.dstAttr
+          val creature = store.value.get(key)
+
+          if (creature.isAlive()) {
+            val healRatio = creature.getHealthP()
+
+            // TODO: Either ask the creature or set a threshold
+            if (healRatio < 0.33f) {
+              edge.sendToSrc((key, healRatio))
+            }
+          }
+        }
+      },
+      // min health ratio
+      (a, b)  => if (b._2 > a._2) a else b)
+
+    val resultAggregate = tempResult.collect()
+    if (resultAggregate.length == 0) return false
+
+    val onlyMonoForNow = healingSpells.filter(_.isInstanceOf[MonoHealingSpell])
+    val target = store.value.get(resultAggregate(0)._2._1)
+    // TODO: Get the most useful
+    val spell = onlyMonoForNow(0).asInstanceOf[MonoHealingSpell]
+    spell.apply(this, target, null)
+
+    allSpells = allSpells.slice(0, allSpells.length - 1)
+
+    return true
+  }
+
   def regenerate(): Unit = {
     if ((health != maxHealth) && (regeneration != 0)) {
       println(s"\t${Console.GREEN}${name} regenerates ${regeneration} hp.${Console.RESET}")
@@ -121,10 +168,11 @@ abstract class Creature(val name : String) extends Serializable {
 
   def getHealthP(): Float = {
     val result = health / maxHealth
-    return health
+    return result
   }
 
-  private def findWeakestEnemy(id: VertexId, graph: Graph[Int, Int], store: Broadcast[CreatureStore.type])() : Creature = {
+  // Ask enemies what their life is. Attack the one with the lowest health.
+  protected def findWeakestEnemy(id: VertexId, graph: Graph[Int, Int], store: Broadcast[CreatureStore.type])() : Creature = {
     val tempResult = graph.aggregateMessages[(Int, Int)](
       edge => {
         val isEnemy = edge.toEdgeTriplet.attr == 0
@@ -153,6 +201,41 @@ abstract class Creature(val name : String) extends Serializable {
     val result = resultAggregate(0)._2
     return store.value.get(result._1)
   }
+
+  protected def findRandomEnemy(id: VertexId, graph: Graph[Int, Int], store: Broadcast[CreatureStore.type])() : Creature = {
+    val tempResult = graph.aggregateMessages[Int](
+      edge => {
+        val isEnemy = edge.toEdgeTriplet.attr == 0
+
+        if ((edge.srcId == id) && isEnemy) {
+          val key = edge.dstAttr
+          val creature = store.value.get(key)
+
+          if (creature.isAlive()) {
+            edge.sendToSrc(key)
+          }
+        }
+      },
+
+      (a, b)  => if (Dice.d10.roll() <= 5) a else b)
+
+    val resultAggregate = tempResult.collect()
+
+    if (resultAggregate.length == 0) {
+      return null
+    }
+
+    val result = resultAggregate(0)._2
+    return store.value.get(result)
+  }
+
+  protected def addSpell(s: Spell[_], count: Int): Unit = {
+    allSpells ++= (1 to count).map(_ => s)
+  }
+
+  protected def addSpell(s: Spell[_]): Unit = {
+    allSpells += s
+  }
 }
 
 object Bestiary {
@@ -169,6 +252,11 @@ object Bestiary {
     // TODO: Range attacks
     allAttacks += DancingGreatSword
     allAttacks += SolarSlam
+
+    addSpell(CureLightWounds, 3)
+    addSpell(CureModerateWounds, 2)
+    addSpell(CureSeriousWounds)
+    addSpell(CureCriticalWounds, 3)
   }
 
   case class Planetar() extends Creature("Planetar") {
@@ -184,6 +272,10 @@ object Bestiary {
     // TODO: Range attacks
     allAttacks += HolyGreatSword
     allAttacks += PlanetarSlam
+
+    addSpell(CureLightWounds, 4)
+    addSpell(CureModerateWounds, 2)
+    addSpell(CureSeriousWounds, 2)
   }
 
   case class MovanicDeva() extends Creature("Movanic Deva") {
@@ -197,6 +289,9 @@ object Bestiary {
 
     // TODO: Ranged attacks
     allAttacks += FlamingGreatSword
+
+    // NOTE: It says "7/day"
+    addSpell(CureSeriousWounds, 7)
   }
 
   case class AstralDeva() extends Creature("Astral Deva") {
@@ -211,6 +306,8 @@ object Bestiary {
     // TODO: Ranged attacks
     allAttacks += DisruptingWarhammer
     allAttacks += AstralSlam
+
+    addSpell(CureSeriousWounds, 7)
   }
 
   case class GreenGreatWyrmDragon() extends Creature("Green Great Wyrm Dragon") {
@@ -229,7 +326,15 @@ object Bestiary {
     allAttacks += TailSlap
   }
 
-  case class OrcBarbarian() extends Creature("Orc Barbarian") {
+  abstract class Orc(override val name: String) extends Creature(name) {
+    override protected def think(id: VertexId, graph: Graph[Int, Int], store: Broadcast[CreatureStore.type]): Boolean = {
+      val strategy = (c: Creature) => findRandomEnemy(id, graph, store)
+
+      return attack(strategy)
+    }
+  }
+
+  case class OrcBarbarian() extends Orc("Orc Barbarian") {
     healthFormula = new Formula(4, Dice.d12, 16)
 
     initiative = 1
@@ -239,7 +344,7 @@ object Bestiary {
     allAttacks += GreatAxe
   }
 
-  case class AngelSlayer() extends Creature("Angel Slayer") {
+  case class AngelSlayer() extends Orc("Angel Slayer") {
     healthFormula = new Formula(15, Dice.d10, 25)
 
     initiative = 7
@@ -250,7 +355,7 @@ object Bestiary {
     allAttacks += DoubleAxe2
   }
 
-  case class WorgRider() extends Creature("Worg Rider") {
+  case class WorgRider() extends Orc("Worg Rider") {
     healthFormula = new Formula(2, Dice.d10, 2)
 
     initiative = 2
@@ -260,7 +365,7 @@ object Bestiary {
     allAttacks += MWKBattleAxe
   }
 
-  case class Warlord() extends Creature("Warlord") {
+  case class Warlord() extends Orc("Warlord") {
     healthFormula = new Formula(13, Dice.d10, 65)
 
     initiative = 2
@@ -271,7 +376,7 @@ object Bestiary {
     allAttacks += LionShield
   }
 
-  case class BarbaresOrc() extends Creature("Barbares Orc") {
+  case class BarbaresOrc() extends Orc("Barbares Orc") {
     healthFormula = new Formula(11, Dice.d12, 65)
 
     initiative = 4

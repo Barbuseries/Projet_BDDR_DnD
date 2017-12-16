@@ -67,8 +67,8 @@ object Main {
     var allies = new Team()
     var enemies = new Team()
 
-    buildFightOne(allies, enemies)
-    //buildFightTwo(allies, enemies)
+    //buildFightOne(allies, enemies)
+    buildFightTwo(allies, enemies)
 
     val graph = createGraph(sc, allies, enemies)
 
@@ -96,21 +96,21 @@ object Main {
       done = (winners != 0)
     }
 
-    winners match {
-      case 0 => {
-        println("How did _that_ happen?")
-      }
-      case 1 => {
-        println(s"\t\t\t\tALLIES WIN. ${Console.BLINK}${Console.RED}DIVINITY.${Console.RESET}")
-      }
-      case -1 => {
-        println(s"\t\t\t\t${Console.RED_B}GAME OVER${Console.RESET}")
-      }
+    if (winners == 0) {
+      println("How did _that_ happen?")
+    }
+    else if (winners > 0) {
+      println(s"\t\t\t\tALLIES WIN. ${Console.BLINK}${Console.RED}DIVINITY.${Console.RESET}")
+      println(s"${winners} allies left.")
+    }
+    else {
+      println(s"\t\t\t\t${Console.RED_B}GAME OVER${Console.RESET}")
+      println(s"${-winners} enemies left.")
     }
   }
 
-  // +1 = allies
-  // -1 = enemies
+  // > 0 = allies (count)
+  // < 0 = enemies (-count)
   // 0 = none
   private def getVictoriousTeam(graph: Graph[Int, Int], store: Broadcast[CreatureStore.type]): Int = {
     var askedFirstVertex = false
@@ -145,17 +145,20 @@ object Main {
       (a, b) => (a._1 + b._1, a._2 + b._2)
     ).collect().head
 
-    val alliesAlive  = (teamAliveCount._2._1 != 0)
-    val enemiesAlive = (teamAliveCount._2._2 != 0)
+    val allyCount = teamAliveCount._2._1
+    val enemyCount = teamAliveCount._2._2
+
+    val alliesAlive  = (allyCount != 0)
+    val enemiesAlive = (enemyCount != 0)
 
     if (alliesAlive && enemiesAlive) {
       return 0
     }
     else if (alliesAlive) {
-      return 1
+      return allyCount
     }
     else if (enemiesAlive) {
-      return -1
+      return -enemyCount
     }
     else {
       throw new Exception("A ancient multi-dimensional multicolor dragon has appeared! Run for your life!")
