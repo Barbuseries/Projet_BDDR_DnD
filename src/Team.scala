@@ -29,8 +29,8 @@ class Team () {
   }
 
   // TODO: Store more information inside the edges (last Int field).
-  def edges(): ArrayBuffer[Edge[Int]] = {
-    val result = for (i <- 0 until members.length; j <- (i + 1) until members.length) yield Edge(i.toLong, j.toLong, 1)
+  def edges(): ArrayBuffer[Edge[Relationship.Value]] = {
+    val result = for (i <- 0 until members.length; j <- (i + 1) until members.length) yield Edge(i.toLong, j.toLong, Relationship.Ally)
 
     return result.to[mutable.ArrayBuffer]
   }

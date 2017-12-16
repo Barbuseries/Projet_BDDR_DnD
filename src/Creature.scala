@@ -1,11 +1,61 @@
 import java.io.{FileInputStream, FileOutputStream, ObjectInputStream, ObjectOutputStream}
 
+import Main.World
 import org.apache.spark.broadcast.Broadcast
-import org.apache.spark.graphx.{Graph, VertexId}
+import org.apache.spark.graphx.{Edge, EdgeContext, Graph, VertexId}
 
 import scala.collection.mutable.ArrayBuffer
+import scala.reflect.ClassTag
+
+object Relationship extends Enumeration {
+  val Ally, Enemy = Value
+}
 
 abstract class Creature(val name : String) extends Serializable {
+  type Message[T] = EdgeContext[Int, Relationship.Value, T]
+
+  class Context(val id: VertexId, val graph: World, val store: Broadcast[CreatureStore.type]) extends Serializable {
+    // TODO: As the creature is fetched anyway (to know if it is alive, pass it as parameter to the map function)
+    private type Mapper[T] = (Message[T], Int) => Unit
+    private type Reducer[T] = (T, T) => T
+    private type Result[T] = Array[(VertexId, T)]
+
+    def onLinked[T: ClassTag](recipient: (Message[T]) => Boolean,
+                                      map: Mapper[T],
+                                      reduce: Reducer[T]): Result[T] = {
+      val result = graph.aggregateMessages[T](
+        edge => {
+          // NOTE: We could check for ((edge.srcId == id) || (edge.dstId == id))
+          // if we use a directed graph representation (we which do), with one edge between each vertex
+          // (currently, there are two (one for each direction because we want an undirected graph)).
+          val linkedToMe = (edge.srcId == id)
+          val data = edge.dstAttr
+
+          if (linkedToMe) {
+            if (recipient(edge)) {
+              val creature = store.value.get(data)
+
+              if (creature.isAlive()) {
+                map(edge, data)
+              }
+            }
+          }
+        },
+        (a, b) => reduce(a, b)).collect()
+
+      return result
+    }
+
+    def onAllies[T: ClassTag](map: Mapper[T], reduce: Reducer[T]): Result[T] =
+      onLinked[T]((e) => e.attr == Relationship.Ally, map, reduce)
+
+    def onEnemies[T: ClassTag](map: Mapper[T], reduce: Reducer[T]): Result[T] =
+      onLinked[T]((e) => e.attr == Relationship.Enemy, map, reduce)
+
+    def onAll[T: ClassTag](map: Mapper[T], reduce: Reducer[T]): Result[T] =
+      onLinked[T]((e) => true, map, reduce)
+  }
+
   var initiative: Int = 0
 
   var healthFormula: Formula = _
@@ -46,9 +96,9 @@ abstract class Creature(val name : String) extends Serializable {
     return obj
   }
 
-  protected def think(id: VertexId, graph: Graph[Int, Int], store: Broadcast[CreatureStore.type]): Boolean = {
+  protected def think(context: Context): Boolean = {
     // TODO (way later): Ask allies if they need anything
-    if(healAllies(id, graph, store)) return true
+    if(healAllies(context)) return true
 
     // TODO: Change to use a custom strength evaluation function
     val strategy = (previousTarget : Creature) => {
@@ -56,7 +106,7 @@ abstract class Creature(val name : String) extends Serializable {
         previousTarget
       }
       else {
-        findWeakestEnemy(id, graph, store)
+        findWeakestEnemy(context)
       }
     }
 
@@ -65,13 +115,15 @@ abstract class Creature(val name : String) extends Serializable {
     return false
   }
 
-  def play(id: VertexId, graph: Graph[Int, Int], store: Broadcast[CreatureStore.type]) : Unit = {
+  def play(id: VertexId, graph: World, store: Broadcast[CreatureStore.type]) : Unit = {
     println(s"$name ($health) is playing...")
     var played = false
 
     regenerate()
 
-    played = think(id, graph, store)
+    val context = new Context(id, graph, store)
+
+    played = think(context)
 
     if (!played) {
       println("\tBut can not do anything...")
@@ -118,38 +170,29 @@ abstract class Creature(val name : String) extends Serializable {
     return true
   }
 
-  protected def healAllies(id: VertexId, graph: Graph[Int, Int], store: Broadcast[CreatureStore.type]): Boolean = {
+  protected def healAllies(context: Context): Boolean = {
     // TODO: Implement something based on either a spell type or a spell target (allies and or enemies)
     val healingSpells = allSpells.filter(_.isInstanceOf[HealingSpell[_]])
     if (healingSpells.length == 0) return false
 
-    val tempResult = graph.aggregateMessages[(Int, Float)](
-      edge => {
-        val isEnemy = edge.toEdgeTriplet.attr == 0
+    val tempResult = context.onAllies[(Int, Float)](
+      (e, key) => {
+          val creature = context.store.value.get(key)
+        
+          val healRatio = creature.getHealthP()
 
-        // See NOTE findWeakestEnemy
-        if ((edge.srcId == id) && !isEnemy) {
-          val key = edge.dstAttr
-          val creature = store.value.get(key)
-
-          if (creature.isAlive()) {
-            val healRatio = creature.getHealthP()
-
-            // TODO: Either ask the creature or set a threshold
-            if (healRatio < 0.33f) {
-              edge.sendToSrc((key, healRatio))
-            }
+          // TODO: Either ask the creature or set a threshold
+          if (healRatio < 0.33f) {
+            e.sendToSrc((key, healRatio))
           }
-        }
-      },
+        },
       // min health ratio
       (a, b)  => if (b._2 > a._2) a else b)
 
-    val resultAggregate = tempResult.collect()
-    if (resultAggregate.length == 0) return false
+    if (tempResult.length == 0) return false
 
     val onlyMonoForNow = healingSpells.filter(_.isInstanceOf[MonoHealingSpell])
-    val target = store.value.get(resultAggregate(0)._2._1)
+    val target = context.store.value.get(tempResult(0)._2._1)
     // TODO: Get the most useful
     val spell = onlyMonoForNow(0).asInstanceOf[MonoHealingSpell]
     spell.apply(this, target, null)
@@ -171,62 +214,41 @@ abstract class Creature(val name : String) extends Serializable {
     return result
   }
 
-  // Ask enemies what their life is. Attack the one with the lowest health.
-  protected def findWeakestEnemy(id: VertexId, graph: Graph[Int, Int], store: Broadcast[CreatureStore.type])() : Creature = {
-    val tempResult = graph.aggregateMessages[(Int, Int)](
-      edge => {
-        val isEnemy = edge.toEdgeTriplet.attr == 0
+  // Ask entities with the given relationship what their life is. Return the one with the lowest health.
+  private def findWeakest(context: Context, relationship: Relationship.Value)(): Creature = {
+    val tempResult = context.onLinked[(Int, Int)](
+      (e) =>  e.attr == relationship,
 
-        // NOTE: We could check for ((edge.srcId == id) || (edge.dstId == id))
-        // if we use a directed graph representation (we which do), with one edge between each vertex
-        // (currently, there are two (one for each direction because we want an undirected graph)).
-        if ((edge.srcId == id) && isEnemy) {
-          val key = edge.dstAttr
-          val creature = store.value.get(key)
-
-          if (creature.isAlive()) {
-            edge.sendToSrc((key, creature.health))
-          }
-        }
+      (e, key: Int) => {
+        val creature = context.store.value.get(key)
+        e.sendToSrc((key, creature.health))
       },
-      // min health
-      (a, b)  => if (b._2 > a._2) a else b)
+      (a, b) => if (a._2 > b._2) b else a)
 
-    val resultAggregate = tempResult.collect()
+    if (tempResult.length == 0) return null
 
-    if (resultAggregate.length == 0) {
-      return null
-    }
+    val result = context.store.value.get(tempResult(0)._2._1)
 
-    val result = resultAggregate(0)._2
-    return store.value.get(result._1)
+    return result
   }
 
-  protected def findRandomEnemy(id: VertexId, graph: Graph[Int, Int], store: Broadcast[CreatureStore.type])() : Creature = {
-    val tempResult = graph.aggregateMessages[Int](
-      edge => {
-        val isEnemy = edge.toEdgeTriplet.attr == 0
+  private def findWeakestEnemy(context: Context)(): Creature = findWeakest(context, Relationship.Enemy)
 
-        if ((edge.srcId == id) && isEnemy) {
-          val key = edge.dstAttr
-          val creature = store.value.get(key)
+  protected def findRandomEnemy(context: Context)() : Creature = {
+    val tempResult = context.onEnemies[Int](
+      (e, key) => {
+        val creature = context.store.value.get(key)
 
-          if (creature.isAlive()) {
-            edge.sendToSrc(key)
-          }
+        if (creature.isAlive()) {
+          e.sendToSrc(key)
         }
       },
-
       (a, b)  => if (Dice.d10.roll() <= 5) a else b)
 
-    val resultAggregate = tempResult.collect()
+    if (tempResult.length == 0) return null
 
-    if (resultAggregate.length == 0) {
-      return null
-    }
-
-    val result = resultAggregate(0)._2
-    return store.value.get(result)
+    val result = tempResult(0)._2
+    return context.store.value.get(result)
   }
 
   protected def addSpell(s: Spell[_], count: Int): Unit = {
@@ -327,8 +349,8 @@ object Bestiary {
   }
 
   abstract class Orc(override val name: String) extends Creature(name) {
-    override protected def think(id: VertexId, graph: Graph[Int, Int], store: Broadcast[CreatureStore.type]): Boolean = {
-      val strategy = (c: Creature) => findRandomEnemy(id, graph, store)
+    override protected def think(context: Context): Boolean = {
+      val strategy = (c: Creature) => findRandomEnemy(context)
 
       return attack(strategy)
     }

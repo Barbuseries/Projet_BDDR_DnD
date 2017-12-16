@@ -6,8 +6,10 @@ import org.apache.spark.{SparkConf, SparkContext}
 import scala.collection.mutable.ArrayBuffer
 
 object Main {
+  type World = Graph[Int, Relationship.Value]
+
   // TODO: To implement invocation spells (Summon 7), there needs to be a way to add vertices to the graph.
-  def createGraph(sc: SparkContext, allies : Team, enemies : Team): Graph[Int, Int] = {
+  def createGraph(sc: SparkContext, allies : Team, enemies : Team): World = {
     val allies_len = allies.members.length
     val enemies_len = enemies.members.length
 
@@ -19,7 +21,7 @@ object Main {
     val allyEdges = allies.edges()
     val enemyEdges = enemies.edges().map(e => Edge(offset + e.srcId, offset + e.dstId, e.attr))
     // Joins allies and enemies
-    val inBetweenEdges = for (i <- 0 until allies_len; j <- 0 until enemies_len) yield Edge(i.toLong, (offset + j).toLong, 0)
+    val inBetweenEdges = for (i <- 0 until allies_len; j <- 0 until enemies_len) yield Edge(i.toLong, (offset + j).toLong, Relationship.Enemy)
 
 
     // As GraphX only uses directional graphs, add edges in the other direction
@@ -31,7 +33,7 @@ object Main {
     return result
   }
 
-  def inverseEdges(edges: ArrayBuffer[Edge[Int]]): ArrayBuffer[Edge[Int]] = {
+  def inverseEdges[T](edges: ArrayBuffer[Edge[T]]): ArrayBuffer[Edge[T]] = {
     return edges.map(e => Edge(e.dstId, e.srcId, e.attr))
   }
 
@@ -112,7 +114,7 @@ object Main {
   // > 0 = allies (count)
   // < 0 = enemies (-count)
   // 0 = none
-  private def getVictoriousTeam(graph: Graph[Int, Int], store: Broadcast[CreatureStore.type]): Int = {
+  private def getVictoriousTeam(graph: World, store: Broadcast[CreatureStore.type]): Int = {
     var askedFirstVertex = false
     val teamAliveCount = graph.aggregateMessages[(Int, Int)](
       edge => {
@@ -120,7 +122,7 @@ object Main {
           val creature = store.value.get(edge.dstAttr)
 
           if (creature.isAlive()) {
-            if (edge.attr == 1) {
+            if (edge.attr == Relationship.Ally) {
               edge.sendToSrc((1, 0))
             }
             else {
