@@ -66,8 +66,8 @@ object Main {
     allies.add(AstralDeva(), 5)
 
     enemies.add(GreenGreatWyrmDragon())
-    //enemies.add(OrcBarbarian(), 200)
-    //enemies.add(AngelSlayer(), 10)
+    enemies.add(OrcBarbarian(), 200)
+    enemies.add(AngelSlayer(), 10)
 
     roundFightStarts = 3
     roundFightIsMelee = 7

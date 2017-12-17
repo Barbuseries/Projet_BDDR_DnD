@@ -356,10 +356,10 @@ object Bestiary {
           var target = findWeakestAngelSlayer(context)
 
           if (target == null) {
-            target = this match {
+            /*target = this match {
               case solar: Solar => findDragon(context)
               case _ => null
-            }
+            }*/
 
             if (target == null) {
               // Can not attack humans! (altered dragon)
@@ -409,7 +409,7 @@ object Bestiary {
     damageReduction = 10
     spellReduction = 27
 
-    allAttacks = List(List(HolyGreatSword)/*, PlanetarSlam*/)
+    allAttacks = List(List(HolyGreatSword)/*, PlanetarSlam*/, List(CompositeLongbow))
 
     addSpell(CureLightWounds, 4)
     addSpell(CureModerateWounds, 2)
@@ -427,7 +427,7 @@ object Bestiary {
     damageReduction = 10
     spellReduction = 21
 
-    allAttacks = List(List(FlamingGreatSword))
+    allAttacks = List(List(FlamingGreatSword), List(CompositeLongbow))
 
     // NOTE: It says "7/day"
     addSpell(CureSeriousWounds, 7)
@@ -442,7 +442,7 @@ object Bestiary {
     damageReduction = 10
     spellReduction = 25
 
-    allAttacks = List(List(DisruptingWarhammer)/*, AstralSlam*/)
+    allAttacks = List(List(DisruptingWarhammer)/*, AstralSlam*/, List(CompositeLongbow))
 
     addSpell(CureSeriousWounds, 7)
   }
