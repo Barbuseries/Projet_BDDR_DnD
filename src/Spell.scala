@@ -25,18 +25,19 @@ object DummyFireSpell extends MultipleTargetsSpell("Fire spell") {
 }
 
 abstract class HealingSpell[T](override val name: String) extends Spell[T](name) {
+    override def canApply(user: Creature, target: Creature) : Boolean = target.getHealthP() < 1
+}
+
+abstract class MonoHealingSpell(override val name: String) extends HealingSpell[Creature](name) {
   override def describe(a: Creature, d: Creature): String =  {
     var dName = d.name
     if (a eq d) {
       dName = "itself"
     }
 
-    return s"${a.name} uses ${name} to heal ${d.name}"
+    return s"${a.name} uses ${name} to heal ${dName}"
   }
-  override def canApply(user: Creature, target: Creature) : Boolean = target.getHealthP() < 1
-}
 
-abstract class MonoHealingSpell(override val name: String) extends HealingSpell[Creature](name) {
   override def apply(user: Creature,
                      target: Creature,
                      targetSelector: (Creature) => Creature): Creature = {
@@ -54,6 +55,41 @@ abstract class MonoHealingSpell(override val name: String) extends HealingSpell[
   }
 }
 
+abstract class MultipleHealingSpell(override val name: String) extends HealingSpell[List[Creature]](name) {
+  override def describe(a: Creature, d: Creature): String =  {
+    var dName = d.name
+    if (a eq d) {
+      dName = "itself"
+    }
+
+    return s"${a.name} heals ${dName}"
+  }
+
+  override def apply(user: Creature,
+                     target: List[Creature],
+                     targetSelector: (List[Creature]) => List[Creature]): List[Creature] = {
+    assert(formula != null)
+
+    println(s"\t${Console.GREEN}${user.name} uses ${name}...${Console.RESET}")
+
+    target.foreach(t => {
+      // TODO?: only display actual heal (if (life + heal > maxLife))
+      val fullHeal = formula.compute()
+
+      t.heal(fullHeal)
+
+      val description = describe(user, t)
+      println(s"\t${Console.GREEN}${description} for ${fullHeal} hp!${Console.RESET}")
+    })
+
+    return target
+  }
+}
+
+// NOTE: This should take into account the caster level (CL),
+// but I do not want to implement that, so I'll just set the base heal to be
+// min(20, maxSpellBaseHeal)
+
 // Healing spells
 object CureLightWounds extends MonoHealingSpell("Cure Light Wounds") {
   formula = new Formula(1, Dice.d8, 5)
@@ -68,6 +104,14 @@ object CureSeriousWounds extends MonoHealingSpell("Cure Serious Wounds") {
 }
 
 object CureCriticalWounds extends MonoHealingSpell("Cure Critical Wounds") {
+  formula = new Formula(4, Dice.d8, 20)
+}
+
+object MassCureModerateWounds extends MultipleHealingSpell("Mass Cure Moderate Wounds") {
+  formula = new Formula(2, Dice.d8, 20)
+}
+
+object MassCureCriticalWounds extends MultipleHealingSpell("Mass Cure Critical Wounds") {
   formula = new Formula(4, Dice.d8, 20)
 }
 

@@ -262,6 +262,8 @@ object Bestiary {
   abstract class Angel(override val name: String) extends Creature(name) {
     creatureType = CreatureType.Angel
 
+    val minCountToUseMassHeal = 3
+
     private def findWeakestAngelSlayer(context: Context): Creature = {
         val result = context.onEnemies[(Int, Int)]((e, creature, key) => {
           creature match {
@@ -286,29 +288,49 @@ object Bestiary {
         dragonThreat = AcidBreath.damageFormula.computeAverage()
       }
 
-      // TODO: Count the number of allies that needs to be healed.
-      // If count > threshold, use mass heal spell.
       val includeSelf = true
-      val tempResult = context.onAllies[(Int, Float)](
+      val tempResult = context.onAllies[List[Int]](
         (e, creature, key) => {
-          val healRatio = creature.getHealthP()
-          val needHeal = (creature.health <= dragonThreat) || (healRatio < 0.33f)
-
-          if (needHeal) {
-            e.sendToSrc((key, healRatio))
-          }
+          e.sendToSrc(List(key))
         },
-        // min health ratio
-        (a, b)  => if (b._2 > a._2) a else b,
+        (a, b)  => a ++ b,
         includeSelf)
 
-      if (tempResult == null) return false
+      // Should never happen as _we_ are included
+      assert(tempResult != null)
 
-      val onlyMonoForNow = healingSpells.filter(_.isInstanceOf[MonoHealingSpell])
-      val target = context.store.value.get(tempResult.value._1)
+      val allies = tempResult.value.map((k) => context.store.value.get(k))
+      val alliesToHeal = allies.filter((a) => {
+        val healRatio = a.getHealthP()
+        val needHeal = (a.health <= dragonThreat) || (healRatio < 0.33f)
+
+        needHeal
+      })
+
+      if (alliesToHeal.length == 0) return false
+
+
+      val monoHeals = healingSpells.filter(_.isInstanceOf[MonoHealingSpell])
+      val massHeals = healingSpells.filter(_.isInstanceOf[MultipleHealingSpell])
+
+      // Youhou, heuristics!
+      val useMassHeal = (((massHeals.length != 0) && (alliesToHeal.length >= minCountToUseMassHeal)) ||
+                         (monoHeals.length == 0))
+
       // TODO: Get the most useful
-      val spell = onlyMonoForNow(0).asInstanceOf[MonoHealingSpell]
-      useSpell(spell, target, null)
+      // TODO: Maybe limit the number of allies you can heal at once
+      if (useMassHeal) {
+        val spell = massHeals(0).asInstanceOf[MultipleHealingSpell]
+        val target = allies
+
+        useSpell(spell, target, null)
+      }
+      else {
+        val spell = monoHeals(0).asInstanceOf[MonoHealingSpell]
+        val target = alliesToHeal.minBy(_.health)
+
+        useSpell(spell, target, null)
+      }
 
       return true
     }
@@ -372,6 +394,9 @@ object Bestiary {
     addSpell(CureModerateWounds, 2)
     addSpell(CureSeriousWounds)
     addSpell(CureCriticalWounds, 3)
+
+    addSpell(MassCureModerateWounds)
+    addSpell(MassCureCriticalWounds, 2)
   }
 
   case class Planetar() extends Angel("Planetar") {
@@ -389,6 +414,8 @@ object Bestiary {
     addSpell(CureLightWounds, 4)
     addSpell(CureModerateWounds, 2)
     addSpell(CureSeriousWounds, 2)
+
+    addSpell(MassCureModerateWounds)
   }
 
   case class MovanicDeva() extends Angel("Movanic Deva") {
