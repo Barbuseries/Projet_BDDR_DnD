@@ -1,69 +1,22 @@
 import java.io.{FileInputStream, FileOutputStream, ObjectInputStream, ObjectOutputStream}
 
+import Context.{Mapper, Reducer}
 import Main.World
 import org.apache.spark.broadcast.Broadcast
-import org.apache.spark.graphx.{Edge, EdgeContext, Graph, VertexId}
+import org.apache.spark.graphx.{VertexId}
 
 import scala.collection.mutable.ArrayBuffer
-import scala.reflect.ClassTag
+import scala.util.Random
 
 object Relationship extends Enumeration {
   val Ally, Enemy, All = Value
 }
 
 object CreatureType extends Enumeration {
-  val Angel, Orc, Dragon = Value
+  val Angel, Orc, Dragon, Human = Value
 }
 
 abstract class Creature(val name : String) extends Serializable {
-  type Message[T] = EdgeContext[Int, Relationship.Value, T]
-  type Mapper[T] = (Message[T], Creature, Int) => Unit
-  type Reducer[T] = (T, T) => T
-
-  // We only ever send to src, so we do not need an Array
-  class Result[T](val value: T) extends Serializable {
-  }
-
-  class Context(val id: VertexId, val graph: World, val store: Broadcast[CreatureStore.type]) extends Serializable {
-    // TODO: As the creature is fetched anyway (to know if it is alive, pass it as parameter to the map function)
-    def onLinked[T: ClassTag](recipient: (Message[T]) => Boolean,
-                                      map: Mapper[T],
-                                      reduce: Reducer[T]): Result[T] = {
-      val result = graph.aggregateMessages[T](
-        edge => {
-          // NOTE: We could check for ((edge.srcId == id) || (edge.dstId == id))
-          // if we use a directed graph representation (we which do), with one edge between each vertex
-          // (currently, there are two (one for each direction because we want an undirected graph)).
-          val linkedToMe = (edge.srcId == id)
-          val key = edge.dstAttr
-
-          if (linkedToMe) {
-            if (recipient(edge)) {
-              val creature = store.value.get(key)
-
-              if (creature.isAlive()) {
-                map(edge, creature, key)
-              }
-            }
-          }
-        },
-        (a, b) => reduce(a, b)).collect()
-
-      if (result.length == 0) return null
-
-      return new Result(result(0)._2)
-    }
-
-    def onAllies[T: ClassTag](map: Mapper[T], reduce: Reducer[T]): Result[T] =
-      onLinked[T]((e) => e.attr == Relationship.Ally, map, reduce)
-
-    def onEnemies[T: ClassTag](map: Mapper[T], reduce: Reducer[T]): Result[T] =
-      onLinked[T]((e) => e.attr == Relationship.Enemy, map, reduce)
-
-    def onAll[T: ClassTag](map: Mapper[T], reduce: Reducer[T]): Result[T] =
-      onLinked[T]((e) => true, map, reduce)
-  }
-
   var creatureType: CreatureType.Value = _
 
   var initiative: Int = 0
@@ -85,7 +38,7 @@ abstract class Creature(val name : String) extends Serializable {
   // NOTE: This is actually only useful when doing Angel Slayer -> Angel attack.
   var typeBonusOnAttack: List[(CreatureType.Value, Int)] = List()
 
-  var meleeAttacks: List[List[Attack]] = List()
+  var allAttacks: List[List[Action[_]]] = List()
   // NOTE: spells are removed after they have been use
   var allSpells: ArrayBuffer[Spell[_]] = ArrayBuffer.empty[Spell[_]]
 
@@ -121,7 +74,7 @@ abstract class Creature(val name : String) extends Serializable {
         findWeakestEnemy(context)
     }
 
-    if (attack(strategy)) return true
+    if (attackAccordingTo(strategy)) return true
 
     return false
   }
@@ -152,14 +105,18 @@ abstract class Creature(val name : String) extends Serializable {
     else return 0
   }
 
-  def takeDamages(amount: Int): Unit = {
+  def takeDamages(amount: Int, attacker: Creature): Unit = {
     // TODO: Special message if we happen to have amount == 0?
     // (This is why there is this assert, in case it _does_
     // happen and I forgot to do it.
     assert(amount > 0)
     health -= amount
 
-    if (health < 0) health = 0
+    if (health < 0) {
+      health = 0
+
+      println(s"\t${Console.RED}${name} was slain by ${attacker.name}!${Console.RESET}")
+    }
   }
 
   def heal(amount: Int): Unit = {
@@ -173,23 +130,55 @@ abstract class Creature(val name : String) extends Serializable {
     if (health > maxHealth) health = maxHealth
   }
 
+  def attack[T](attacks: List[Action[_]], target: T, targetSelector: (T) => T): Unit = {
+    var currentTarget = target
 
-  def attack(targetSelector: (Creature) => Creature): Boolean = {
-    var firstCreature = targetSelector(null)
+    if (targetSelector != null) {
+      attacks.foreach((a) => {
+        currentTarget = targetSelector(a.asInstanceOf[Action[T]].apply(this, currentTarget, targetSelector))
+      })
+    }
+    else {
+      attacks.foreach((a) => {
+        currentTarget = a.asInstanceOf[Action[T]].apply(this, currentTarget, null)
+      })
+    }
+  }
+
+  // FIXME: Oh boy...
+  // It's late. I should not be doing this.
+  def attackAccordingTo[T](targetSelector: (T) => T): Boolean = {
+    var firstCreature = targetSelector(null.asInstanceOf[T])
     if (firstCreature == null) return false
 
-    // Can aplly all attacks in the same list
-    val validAttacks = meleeAttacks.filter(_.map(_.canApply(this, firstCreature)).reduce((a, b) => a && b))
+    var checkAllValid: (Action[T], T) => Boolean = null
+
+    if (firstCreature.isInstanceOf[List[_]]) {
+      val checkAllValid = (a: Action[List[_]], l: List[Creature]) => l.map(a.canApply(this, _)).reduce((a, b) => a && b)
+    }
+    else {
+      checkAllValid = (a: Action[T], c: T) => a.canApply(this, c.asInstanceOf[Creature])
+    }
+
+    // Can apply all attacks in the same list
+    var validAttacks = allAttacks.filter(_.isInstanceOf[List[Action[T]]]).map(_.asInstanceOf[List[Action[T]]])
+    validAttacks = validAttacks.filter(_.map(checkAllValid(_, firstCreature)).reduce((a, b) => a && b))
+
     if (validAttacks.length == 0) return false
 
     // TODO: Can be changed to rank based on min/max/average damages
     val choosenAttack = validAttacks(scala.util.Random.nextInt(validAttacks.length))
-
-    var damages = choosenAttack.map((a) => {
-      firstCreature = a.apply(this, firstCreature, targetSelector)
-    })
+    attack(choosenAttack, firstCreature, targetSelector)
 
     return true
+  }
+
+  protected def useSpell[T](spell: Spell[T], target: T, targetSelector: (T) => T): Unit = {
+    val index = allSpells.indexOf(spell)
+    assert(index != -1)
+    spell.apply(this, target, targetSelector)
+
+    allSpells.remove(index)
   }
 
   protected def healAllies(context: Context): Boolean = {
@@ -215,9 +204,7 @@ abstract class Creature(val name : String) extends Serializable {
     val target = context.store.value.get(tempResult.value._1)
     // TODO: Get the most useful
     val spell = onlyMonoForNow(0).asInstanceOf[MonoHealingSpell]
-    spell.apply(this, target, null)
-
-    allSpells = allSpells.slice(0, allSpells.length - 1)
+    useSpell(spell, target, null)
 
     return true
   }
@@ -235,11 +222,11 @@ abstract class Creature(val name : String) extends Serializable {
   }
 
   // Ask entities with the given relationship what their life is. Return the one with the lowest health.
-  private def findWeakest(context: Context, relationship: Relationship.Value)(): Creature = {
+  private def findWeakest(context: Context, relationship: Relationship.Value, validator: (Creature) => Boolean)(): Creature = {
     var tempResult: Result[(Int, Int)] = null
 
     val mapper: Mapper[(Int, Int)] = (e, creature, key) => {
-      e.sendToSrc((key, creature.health))
+      if (validator(creature)) e.sendToSrc((key, creature.health))
     }
 
     val reducer: Reducer[(Int, Int)] = (a, b) => if (a._2 > b._2) b else a
@@ -256,7 +243,23 @@ abstract class Creature(val name : String) extends Serializable {
     return result
   }
 
-  private def findWeakestEnemy(context: Context)(): Creature = findWeakest(context, Relationship.Enemy)
+  protected def findWeakestEnemy(context: Context, validator: (Creature) => Boolean = (c) => true)(): Creature =
+    findWeakest(context, Relationship.Enemy, validator)
+
+  protected def findRandomEnemies(context: Context, count: Int) : List[Creature] = {
+    val tempResult = context.onEnemies[List[Int]](
+      (e, creature, key) => {
+        e.sendToSrc(List(key))
+      },
+      (a, b)  => a ++ b)
+
+    if (tempResult == null) return null
+
+    val enemies = Random.shuffle(tempResult.value).take(count)
+
+    val result = enemies.map(context.store.value.get(_))
+    return result
+  }
 
   protected def findRandomEnemy(context: Context)() : Creature = {
     val tempResult = context.onEnemies[List[Int]](
@@ -284,8 +287,48 @@ abstract class Creature(val name : String) extends Serializable {
 }
 
 object Bestiary {
+  // Make own think method
   abstract class Angel(override val name: String) extends Creature(name) {
     creatureType = CreatureType.Angel
+
+    private def findWeakestAngelSlayer(context: Context): Creature = {
+        val result = context.onEnemies[(Int, Int)]((e, creature, key) => {
+          creature match {
+            case slayer: AngelSlayer => e.sendToSrc(key, slayer.health)
+            case _ =>
+          }
+        },
+          (a, b) => if (a._2 > b._2) b else a)
+
+      if (result == null) return null
+      return context.store.value.get(result.value._1)
+    }
+
+    override protected def think(context: Context): Boolean = {
+      if(healAllies(context)) return true
+
+      // TODO: Change to use a custom strength evaluation function
+      val strategy = (previousTarget : Creature) => {
+        if (previousTarget != null) {
+          previousTarget
+        }
+        else {
+          var target = findWeakestAngelSlayer(context)
+
+          if (target == null) {
+            // Can not attack humans! (altered dragon)
+            // It would not get attacked anyway, because it is only the weakest when alone.
+            target = findWeakestEnemy(context, _.creatureType != CreatureType.Human)
+          }
+
+          target
+        }
+      }
+
+      if (attackAccordingTo(strategy)) return true
+
+      return false
+    }
   }
 
   case class Solar() extends Angel("Solar") {
@@ -299,7 +342,7 @@ object Bestiary {
     spellReduction = 34
 
     // TODO: Range attacks
-    meleeAttacks = List(List(DancingGreatSword)/*, SolarSlam*/)
+    allAttacks = List(List(DancingGreatSword)/*, SolarSlam*/)
 
     addSpell(CureLightWounds, 3)
     addSpell(CureModerateWounds, 2)
@@ -318,7 +361,7 @@ object Bestiary {
     spellReduction = 27
 
     // TODO: Range attacks
-    meleeAttacks = List(List(HolyGreatSword)/*, PlanetarSlam*/)
+    allAttacks = List(List(HolyGreatSword)/*, PlanetarSlam*/)
 
     addSpell(CureLightWounds, 4)
     addSpell(CureModerateWounds, 2)
@@ -335,7 +378,7 @@ object Bestiary {
     spellReduction = 21
 
     // TODO: Ranged attacks
-    meleeAttacks = List(List(FlamingGreatSword))
+    allAttacks = List(List(FlamingGreatSword))
 
     // NOTE: It says "7/day"
     addSpell(CureSeriousWounds, 7)
@@ -351,7 +394,7 @@ object Bestiary {
     spellReduction = 25
 
     // TODO: Ranged attacks
-    meleeAttacks = List(List(DisruptingWarhammer)/*, AstralSlam*/)
+    allAttacks = List(List(DisruptingWarhammer)/*, AstralSlam*/)
 
     addSpell(CureSeriousWounds, 7)
   }
@@ -368,7 +411,73 @@ object Bestiary {
     spellReduction = 31
 
     // TODO: Ranged attacks
-    meleeAttacks = List(List(DragonBite, Claw, Wings, TailSlap))
+    allAttacks = List(List(DragonBite, Claw, Wings, TailSlap), List(AcidBreath))
+
+    addSpell(AlterSelf)
+
+    private var round = 0
+    // @HACK to simulate the behaviour until we have 3d movement (we won't, ever)
+    private val roundWhenCloseEnough = 5
+
+    private def GetSolar(context: Context): Solar = {
+      // As there is only one Solar, returning one is not too expensive (I think...)
+      var result = context.onEnemies[Solar](
+        (e, creature, key) => {
+          creature match {
+            case solar: Solar => e.sendToSrc(solar)
+            case _ =>
+          }
+        },
+          (a, b) => a)
+
+      assert(result != null)
+
+      if (result == null) return null
+      return result.value
+    }
+
+    private def thinkFirstRound(context: Context): Boolean = {
+      useSpell(AlterSelf, this, null)
+
+      return true
+    }
+
+    private def thinkWhileHumanRounds(context: Context) : Boolean = {
+      val solar: Creature = GetSolar(context)
+
+      if (round != roundWhenCloseEnough) {
+        println(s"\t${name} gets closer to ${solar.name}...")
+      }
+      else {
+        println(s"\t${name} changes back to a dragon!")
+        creatureType = CreatureType.Dragon
+
+        attack(allAttacks.head, solar, (creature: Creature) => creature)
+      }
+
+      return true
+    }
+
+    // TODO: Make it fly and not hittable by melee attacks
+    private def thinkRemainingFight(context: Context): Boolean = {
+      val acidBreath = allAttacks(1)
+      val enemies = findRandomEnemies(context, 3)
+      attack(acidBreath, enemies, null)
+
+      return enemies.length != 0
+    }
+
+    override protected def think(context: Context): Boolean = {
+      val played = round match {
+        case 0 => thinkFirstRound(context)
+        case x if (x <= roundWhenCloseEnough) => thinkWhileHumanRounds(context)
+        case _ => thinkRemainingFight(context)
+      }
+
+      round += 1
+
+      return played
+    }
   }
 
   abstract class Orc(override val name: String) extends Creature(name) {
@@ -377,7 +486,7 @@ object Bestiary {
     override protected def think(context: Context): Boolean = {
       val strategy = (c: Creature) => findRandomEnemy(context)
 
-      return attack(strategy)
+      return attackAccordingTo(strategy)
     }
   }
 
@@ -388,7 +497,7 @@ object Bestiary {
     armor = 15
 
     // TODO: Ranged attacks
-    meleeAttacks = List(List(GreatAxe))
+    allAttacks = List(List(GreatAxe))
   }
 
   case class AngelSlayer() extends Orc("Angel Slayer") {
@@ -398,7 +507,7 @@ object Bestiary {
     armor = 26
 
     // TODO: Ranged attacks
-    meleeAttacks = List(List(DoubleAxe, DoubleAxe2))
+    allAttacks = List(List(DoubleAxe, DoubleAxe2))
 
     typeBonusOnAttack = List((CreatureType.Angel, 8))
   }
@@ -410,7 +519,7 @@ object Bestiary {
     armor = 18
 
     // TODO: Range attacks
-    meleeAttacks = List(List(MWKBattleAxe))
+    allAttacks = List(List(MWKBattleAxe))
   }
 
   case class Warlord() extends Orc("Warlord") {
@@ -420,7 +529,7 @@ object Bestiary {
     armor = 27
 
     // TODO: Range attacks
-    meleeAttacks = List(List(ViciousFlail, LionShield), List(ViciousFlail2))
+    allAttacks = List(List(ViciousFlail, LionShield), List(ViciousFlail2))
   }
 
   case class BarbaresOrc() extends Orc("Barbares Orc") {
@@ -432,6 +541,6 @@ object Bestiary {
     damageReduction = 3
 
     // TODO: Range attacks
-    meleeAttacks = List(List(OrcDoubleAxe), List(OrcDoubleAxe2, OrcDoubleAxe3, OrcBite))
+    allAttacks = List(List(OrcDoubleAxe), List(OrcDoubleAxe2, OrcDoubleAxe3, OrcBite))
   }
 }

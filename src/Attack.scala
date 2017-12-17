@@ -13,7 +13,6 @@ abstract case class Attack(name: String) extends Action[Creature] with Serializa
           targetSelector: (Creature) => Creature = null): Creature = {
     assert(damageFormula != null)
 
-    var total = 0
     var defender = initialCreature
 
     assert((initialCreature != null) || (targetSelector != null))
@@ -26,6 +25,11 @@ abstract case class Attack(name: String) extends Action[Creature] with Serializa
       if (defender == null)
          return defender
 
+      if (!defender.isAlive()) {
+        println(oldDefender)
+        println(defender.name)
+        println(defender.health)
+      }
       assert(defender.isAlive())
 
       println(s"\t${attacker.name} targets ${defender.name}...")
@@ -65,18 +69,13 @@ abstract case class Attack(name: String) extends Action[Creature] with Serializa
 
           if (damages > 0) {
             description += s" for ${damages} hp! ((${Console.RED}${baseDamages} ${Console.MAGENTA}+ ${bonus}${Console.RESET}) - ${Console.BLUE}${defender.damageReduction}${Console.RESET})"
-
-            defender.takeDamages(damages)
-            total += damages
           }
           else
             description += s"... but it bounced off!"
 
           println(s"\t$description")
 
-          if (!defender.isAlive()) {
-            println(s"${Console.RED}\t${defender.name} was slain by ${attacker.name}!${Console.RESET}")
-          }
+          if (damages > 0) defender.takeDamages(damages, attacker)
         }
         else {
           println(s"\t${defender.name} blocked the attack!")
@@ -243,6 +242,11 @@ object TailSlap extends Attack("tail slap") {
   override def describe(a: Creature, d: Creature): String = {
     return s"${a.name} ${name}s ${d.name}"
   }
+}
+
+object AcidBreath extends BreathWeapon("Acid Breath") {
+  damageFormula = new Formula(24, Dice.d6, 0)
+  savingThrowDice = new Dice(31)
 }
 
 // Planetar
