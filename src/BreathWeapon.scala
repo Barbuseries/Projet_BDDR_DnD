@@ -1,10 +1,10 @@
-class BreathWeapon(val name: String) extends Action[List[Creature]] {
+class BreathWeapon(val name: String) extends Action[List[Creature]] with Serializable {
   var damageFormula: Formula = _
   var savingThrowDice: Dice = _
 
-  // Yes. Yes it is.
-  private def buryDead(deadOrAlive: List[Creature]): List[Creature] = {
-    val result = deadOrAlive.filter(_.isAlive())
+  // My first PS2 game!
+  private def buryDead(deadOrAlive2: List[Creature]): List[Creature] = {
+    val result = deadOrAlive2.filter(_.isAlive())
 
     if (result.length == 0) return null
     return result
@@ -45,11 +45,14 @@ class BreathWeapon(val name: String) extends Action[List[Creature]] {
 
       val damages = fullDamages - d.spellReduction
 
-      description += s" for ${damages} hp! (${Console.RED}$fullDamages${Console.RESET} - ${Console.BLUE}${d.spellReduction}${Console.RESET})"
+      if (damages > 0) description += s" for ${damages} hp!"
+      else description += s"... but it did not do anything!"
+
+      description += s" (${Console.RED}$fullDamages${Console.RESET} - ${Console.BLUE}${d.spellReduction}${Console.RESET})"
 
       println(s"\t$description")
 
-      d.takeDamages(damages, attacker)
+      if (damages > 0) d.takeDamages(damages, attacker)
 
       if (targetSelector != null) {
         oldDefenders = buryDead(defenders)

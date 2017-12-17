@@ -1,6 +1,6 @@
 // TODO: Implement spells (there may be a common structure with an attack,
 // but they can affect allies and/or multiple creatures).
-abstract case class Spell[T](name: String) extends Action[T] {
+abstract case class Spell[T](name: String) extends Action[T] with Serializable {
   var formula: Formula = _
 }
 

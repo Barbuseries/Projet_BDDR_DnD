@@ -63,21 +63,7 @@ abstract class Creature(val name : String) extends Serializable {
     return obj
   }
 
-  protected def think(context: Context): Boolean = {
-    if(healAllies(context)) return true
-
-    // TODO: Change to use a custom strength evaluation function
-    val strategy = (previousTarget : Creature) => {
-      if (previousTarget != null)
-        previousTarget
-      else
-        findWeakestEnemy(context)
-    }
-
-    if (attackAccordingTo(strategy)) return true
-
-    return false
-  }
+  protected def think(context: Context): Boolean
 
   def play(id: VertexId, graph: World, store: Broadcast[CreatureStore.type]) : Unit = {
     println(s"$name ($health) is playing...")
@@ -181,34 +167,6 @@ abstract class Creature(val name : String) extends Serializable {
     allSpells.remove(index)
   }
 
-  protected def healAllies(context: Context): Boolean = {
-    // TODO: Implement something based on either a spell type or a spell target (allies and or enemies)
-    val healingSpells = allSpells.filter(_.isInstanceOf[HealingSpell[_]])
-    if (healingSpells.length == 0) return false
-
-    val tempResult = context.onAllies[(Int, Float)](
-      (e, creature, key) => {
-          val healRatio = creature.getHealthP()
-
-          // TODO: Either ask the creature or set a threshold
-          if (healRatio < 0.33f) {
-            e.sendToSrc((key, healRatio))
-          }
-        },
-      // min health ratio
-      (a, b)  => if (b._2 > a._2) a else b)
-
-    if (tempResult == null) return false
-
-    val onlyMonoForNow = healingSpells.filter(_.isInstanceOf[MonoHealingSpell])
-    val target = context.store.value.get(tempResult.value._1)
-    // TODO: Get the most useful
-    val spell = onlyMonoForNow(0).asInstanceOf[MonoHealingSpell]
-    useSpell(spell, target, null)
-
-    return true
-  }
-
   def regenerate(): Unit = {
     if ((health != maxHealth) && (regeneration != 0)) {
       println(s"\t${Console.GREEN}${name} regenerates ${regeneration} hp.${Console.RESET}")
@@ -304,6 +262,55 @@ object Bestiary {
       return context.store.value.get(result.value._1)
     }
 
+    private def findDragon(context: Context): Creature = {
+      val result = context.onEnemies[Int]((e, creature, key) => {
+        creature.creatureType match {
+          case CreatureType.Dragon => e.sendToSrc(key)
+          case _ =>
+        }
+      },
+        (a, b) => a)
+
+      if (result == null) return null
+      return context.store.value.get(result.value)
+    }
+
+    protected def healAllies(context: Context): Boolean = {
+      // TODO: Implement something based on either a spell type or a spell target (allies and or enemies)
+      val healingSpells = allSpells.filter(_.isInstanceOf[HealingSpell[_]])
+      if (healingSpells.length == 0) return false
+
+      var dragonThreat = 0
+
+      if(findDragon(context) != null) {
+        dragonThreat = AcidBreath.damageFormula.computeAverage()
+      }
+
+      // TODO: Count the number of allies that needs to be healed.
+      // If count > threshold, use mass heal spell.
+      val tempResult = context.onAllies[(Int, Float)](
+        (e, creature, key) => {
+          val healRatio = creature.getHealthP()
+          val needHeal = (creature.health <= dragonThreat) || (healRatio < 0.33f)
+
+          if (needHeal) {
+            e.sendToSrc((key, healRatio))
+          }
+        },
+        // min health ratio
+        (a, b)  => if (b._2 > a._2) a else b)
+
+      if (tempResult == null) return false
+
+      val onlyMonoForNow = healingSpells.filter(_.isInstanceOf[MonoHealingSpell])
+      val target = context.store.value.get(tempResult.value._1)
+      // TODO: Get the most useful
+      val spell = onlyMonoForNow(0).asInstanceOf[MonoHealingSpell]
+      useSpell(spell, target, null)
+
+      return true
+    }
+
     override protected def think(context: Context): Boolean = {
       if ((Main.fight == 1) && (Main.round < Main.roundFightStarts)) {
         Main.round match {
@@ -323,9 +330,16 @@ object Bestiary {
           var target = findWeakestAngelSlayer(context)
 
           if (target == null) {
-            // Can not attack humans! (altered dragon)
-            // It would not get attacked anyway, because it is only the weakest when alone.
-            target = findWeakestEnemy(context, _.creatureType != CreatureType.Human)
+            target = this match {
+              case solar: Solar => findDragon(context)
+              case _ => null
+            }
+
+            if (target == null) {
+              // Can not attack humans! (altered dragon)
+              // It would not get attacked anyway, because it is only the weakest when alone.
+              target = findWeakestEnemy(context, _.creatureType != CreatureType.Human)
+            }
           }
 
           target
@@ -366,7 +380,6 @@ object Bestiary {
     damageReduction = 10
     spellReduction = 27
 
-    // TODO: Range attacks
     allAttacks = List(List(HolyGreatSword)/*, PlanetarSlam*/)
 
     addSpell(CureLightWounds, 4)
@@ -383,7 +396,6 @@ object Bestiary {
     damageReduction = 10
     spellReduction = 21
 
-    // TODO: Ranged attacks
     allAttacks = List(List(FlamingGreatSword))
 
     // NOTE: It says "7/day"
@@ -399,7 +411,6 @@ object Bestiary {
     damageReduction = 10
     spellReduction = 25
 
-    // TODO: Ranged attacks
     allAttacks = List(List(DisruptingWarhammer)/*, AstralSlam*/)
 
     addSpell(CureSeriousWounds, 7)
@@ -420,16 +431,18 @@ object Bestiary {
 
     addSpell(AlterSelf)
 
+    val roundsBetweenAttacks = 3
+    var remainingRoundsBeforeAttack = 0
+
     private def roundWhenCloseEnough(): Int = {
       return Main.roundFightStarts - 1
     }
 
-    private def getSolar(context: Context): Solar = {
-      // As there is only one Solar, returning one is not too expensive (I think...)
-      var result = context.onEnemies[Solar](
+    private def getSolar(context: Context): Creature = {
+      var result = context.onEnemies[Int](
         (e, creature, key) => {
           creature match {
-            case solar: Solar => e.sendToSrc(solar)
+            case solar: Solar => e.sendToSrc(key)
             case _ =>
           }
         },
@@ -438,13 +451,17 @@ object Bestiary {
       assert(result != null)
 
       if (result == null) return null
-      return result.value
+      return context.store.value.get(result.value)
     }
 
     private def thinkFirstRound(context: Context): Boolean = {
       useSpell(AlterSelf, this, null)
 
       return true
+    }
+
+    private def resetAttackTimer(): Unit = {
+      remainingRoundsBeforeAttack = roundsBetweenAttacks
     }
 
     private def thinkWhileHuman(context: Context) : Boolean = {
@@ -462,16 +479,28 @@ object Bestiary {
         println(s"\t${name} takes off!")
       }
 
+      resetAttackTimer()
+
       return true
     }
 
-    // TODO: Make it fly and not hittable by melee attacks
     private def thinkRemainingFight(context: Context): Boolean = {
-      val acidBreath = allAttacks(1)
-      val enemies = findRandomEnemies(context, 3)
-      attack(acidBreath, enemies, null)
+      if (remainingRoundsBeforeAttack == 0) {
+        val acidBreath = allAttacks(1)
+        val enemies = findRandomEnemies(context, 3)
 
-      return enemies.length != 0
+        attack(acidBreath, enemies, null)
+
+        resetAttackTimer()
+
+        return enemies.length != 0
+      }
+      else {
+        println(s"\t${name} flies around the battlefield.")
+        remainingRoundsBeforeAttack -= 1
+
+        return true
+      }
     }
 
     override protected def think(context: Context): Boolean = {

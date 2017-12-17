@@ -70,24 +70,7 @@ object Main {
     fight = 1
   }
 
-  def main(args: Array[String]) {
-    val conf = new SparkConf()
-      .setAppName("toto")
-      .setMaster("local[4]")
-
-    val sc = new SparkContext(conf)
-    sc.setLogLevel("ERROR")
-
-    var store = sc.broadcast(CreatureStore)
-
-    var allies = new Team()
-    var enemies = new Team()
-
-    buildFightOne(allies, enemies)
-    //buildFightTwo(allies, enemies)
-
-    val graph = createGraph(sc, allies, enemies)
-
+  def gameLoop(graph: World, store: Broadcast[CreatureStore.type]): Int = {
     val orderList = graph.mapVertices((id, c) => store.value.get(c).initiative).vertices.collect().sortBy(-_._2).map(_._1)
 
     var done = false
@@ -104,15 +87,36 @@ object Main {
         if (c.isAlive()) {
           c.play(id, graph, store)
         }
-      }
-    )
 
-      // FIXME?: Btw, as the check is done after every creature has played,
-      // some may spend their time doing nothing or healing allies when
-      // their enemies are already defeated.
-      winners = getVictoriousTeam(graph, store)
-      done = (winners != 0)
+        winners = getVictoriousTeam(graph, store)
+        done = (winners != 0)
+
+        if (done) return winners
+      })
     }
+
+    return winners
+  }
+
+  def main(args: Array[String]) {
+    val conf = new SparkConf()
+      .setAppName("toto")
+      .setMaster("local[4]")
+
+    val sc = new SparkContext(conf)
+    sc.setLogLevel("ERROR")
+
+    var store = sc.broadcast(CreatureStore)
+
+    var allies = new Team()
+    var enemies = new Team()
+
+    //buildFightOne(allies, enemies)
+    buildFightTwo(allies, enemies)
+
+    val graph = createGraph(sc, allies, enemies)
+
+    val winners = gameLoop(graph, store)
 
     if (winners == 0) {
       println("How did _that_ happen?")
@@ -131,7 +135,6 @@ object Main {
   // < 0 = enemies (-count)
   // 0 = none
   private def getVictoriousTeam(graph: World, store: Broadcast[CreatureStore.type]): Int = {
-    var askedFirstVertex = false
     val teamAliveCount = graph.aggregateMessages[(Int, Int)](
       edge => {
         if (edge.srcId == 0) {
@@ -145,26 +148,18 @@ object Main {
               edge.sendToSrc((0, 1))
             }
           }
-
-          // Get the first node once as well
-          if (!askedFirstVertex) {
-            val creature = store.value.get(edge.srcAttr)
-            if (creature.isAlive()) {
-              edge.sendToSrc((1, 0))
-            }
-            else { // So we at least always have a value. Just in case...
-              edge.sendToSrc((0, 0))
-            }
-
-            askedFirstVertex = true
-          }
         }
       },
       (a, b) => (a._1 + b._1, a._2 + b._2)
     ).collect().head
 
-    val allyCount = teamAliveCount._2._1
+    var allyCount = teamAliveCount._2._1
     val enemyCount = teamAliveCount._2._2
+
+    // Get solar status
+    if (store.value.get(0).isAlive()) {
+      allyCount += 1
+    }
 
     val alliesAlive  = (allyCount != 0)
     val enemiesAlive = (enemyCount != 0)
@@ -179,7 +174,7 @@ object Main {
       return -enemyCount
     }
     else {
-      throw new Exception("A ancient multi-dimensional multicolor dragon has appeared! Run for your life!")
+      throw new Exception("An ancient multi-dimensional multicolor dragon has appeared! Run for your life!")
     }
   }
 }
