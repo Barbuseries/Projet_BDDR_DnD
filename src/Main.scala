@@ -41,7 +41,7 @@ object Main {
 
   def inverseEdges[T](edges: ArrayBuffer[Edge[T]]): ArrayBuffer[Edge[T]] = {
     return edges.map(e => {
-      // In case the edge is a goes from and to the same vertex, no need to invert it.
+      // In case the edge a goes from and to the same vertex, no need to invert it.
       if (e.dstId != e.srcId) Edge(e.dstId, e.srcId, e.attr)
       else null
     }).filterNot(_ == null)
@@ -75,19 +75,26 @@ object Main {
   }
 
   def gameLoop(graph: World, store: Broadcast[CreatureStore.type]): Int = {
-    val orderList = graph.mapVertices((id, c) => store.value.get(c).initiative).vertices.collect().sortBy(-_._2).map(_._1)
+    // For each creature, roll initiative (also return the creature key) and sort by smallest one (-initiative).
+    // (After the collect, each vertex is of the form (id, (c, ini)).
+    // For every mapped vertex (id, (c, ini)) only keep (id, c).
+    // NOTE: In practice, id and c are the same.
+    var orderList = graph.mapVertices((id, c) => (c, store.value.get(c).initiative + Dice.d20.roll())).vertices
+                         .sortBy(-_._2._2)
+                         .map(v => (v._1, v._2._1)).collect()
 
     var done = false
     var winners = 0
     while (!done) {
       round += 1
 
-      // FIXME: This is used to iterate over all elements in order (without having to keep an index around).
-      //  There may (should) be a better way to do this (having to filter is bad), but I don't know it yet.
-      orderList.foreach(id => {
-        var key = graph.vertices.filter(_._1 == id).first()._2
+      orderList.foreach((i) => {
+        val id = i._1
+        val key = i._2
+
         var c = store.value.get(key)
 
+        // In case it was killed during this round
         if (c.isAlive()) {
           c.play(id, graph, store)
         }
@@ -97,6 +104,9 @@ object Main {
 
         if (done) return winners
       })
+
+      // Remove dead creatures
+      orderList = orderList.filter((i) => store.value.get(i._2).isAlive())
     }
 
     return winners

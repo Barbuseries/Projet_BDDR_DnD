@@ -89,6 +89,7 @@ abstract class MultipleHealingSpell(override val name: String) extends HealingSp
 // NOTE: This should take into account the caster level (CL),
 // but I do not want to implement that, so I'll just set the base heal to be
 // min(20, maxSpellBaseHeal)
+// Same goes for Heal and MassHeall (10 * CL => min(10 * 20, maxBaseSpellHeal))
 
 // Healing spells
 object CureLightWounds extends MonoHealingSpell("Cure Light Wounds") {
@@ -107,12 +108,21 @@ object CureCriticalWounds extends MonoHealingSpell("Cure Critical Wounds") {
   formula = new Formula(4, Dice.d8, 20)
 }
 
+// NOTE: This should also remove negative effects. But we do not have any!
+object Heal extends MonoHealingSpell("Heal") {
+  formula = new Formula(0, Dice.d20, 150)
+}
+
 object MassCureModerateWounds extends MultipleHealingSpell("Mass Cure Moderate Wounds") {
   formula = new Formula(2, Dice.d8, 20)
 }
 
 object MassCureCriticalWounds extends MultipleHealingSpell("Mass Cure Critical Wounds") {
   formula = new Formula(4, Dice.d8, 20)
+}
+
+object MassHeal extends MultipleHealingSpell("Mass Heal") {
+  formula = new Formula(0, Dice.d20, 200)
 }
 
 // Other spells

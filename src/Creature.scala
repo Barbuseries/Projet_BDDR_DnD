@@ -66,7 +66,7 @@ abstract class Creature(val name : String) extends Serializable {
   protected def think(context: Context): Boolean
 
   def play(id: VertexId, graph: World, store: Broadcast[CreatureStore.type]) : Unit = {
-    println(s"$name ($health) is playing...")
+    println(s"$name ($health / $maxHealth) is playing...")
     var played = false
 
     regenerate()
@@ -235,10 +235,10 @@ abstract class Creature(val name : String) extends Serializable {
     return context.store.value.get(result)
   }
 
-  protected def findDragon(context: Context): Creature = {
+  protected def findByType(context: Context, creatureType: CreatureType.Value): Creature = {
     val result = context.onEnemies[Int]((e, creature, key) => {
       creature.creatureType match {
-        case CreatureType.Dragon => e.sendToSrc(key)
+        case `creatureType` => e.sendToSrc(key)
         case _ =>
       }
     },
@@ -247,6 +247,9 @@ abstract class Creature(val name : String) extends Serializable {
     if (result == null) return null
     return context.store.value.get(result.value)
   }
+
+  protected def findDragon(context: Context): Creature = findByType(context, CreatureType.Dragon)
+  protected def findHuman(context: Context): Creature = findByType(context, CreatureType.Human)
 
   protected def addSpell(s: Spell[_], count: Int): Unit = {
     allSpells ++= (1 to count).map(_ => s)
@@ -337,9 +340,11 @@ object Bestiary {
 
     override protected def think(context: Context): Boolean = {
       if ((Main.fight == 1) && (Main.round < Main.roundFightStarts)) {
-        Main.round match {
-          case 0 => println(s"\t${name} is wary...")
-          case _ => println(s"\t${name} sees a frighten villager!")
+        if (findHuman(context) == null) {
+          println(s"\t${name} is wary...")
+        }
+        else {
+          println(s"\t${name} sees a frightened villager!")
         }
 
         return true
@@ -363,7 +368,8 @@ object Bestiary {
 
             if (target == null) {
               // Can not attack humans! (altered dragon)
-              // It would not get attacked anyway, because it is only the weakest when alone.
+              // It would not get attacked anyway,
+              // because the fight does not start before the dragon is a dragon again.
               target = findWeakestEnemy(context, _.creatureType != CreatureType.Human)
             }
           }
@@ -394,9 +400,11 @@ object Bestiary {
     addSpell(CureModerateWounds, 2)
     addSpell(CureSeriousWounds)
     addSpell(CureCriticalWounds, 3)
+    addSpell(Heal, 3)
 
     addSpell(MassCureModerateWounds)
     addSpell(MassCureCriticalWounds, 2)
+    addSpell(MassHeal)
   }
 
   case class Planetar() extends Angel("Planetar") {
@@ -414,6 +422,7 @@ object Bestiary {
     addSpell(CureLightWounds, 4)
     addSpell(CureModerateWounds, 2)
     addSpell(CureSeriousWounds, 2)
+    addSpell(Heal)
 
     addSpell(MassCureModerateWounds)
   }
@@ -445,6 +454,7 @@ object Bestiary {
     allAttacks = List(List(DisruptingWarhammer)/*, AstralSlam*/, List(CompositeLongbow))
 
     addSpell(CureSeriousWounds, 7)
+    addSpell(Heal)
   }
 
   case class GreenGreatWyrmDragon() extends Creature("Green Great Wyrm Dragon") {

@@ -43,12 +43,10 @@ class BreathWeapon(val name: String) extends Action[List[Creature]] with Seriali
         description += s" (saved)"
       }
 
-      val damages = fullDamages - d.spellReduction
+      val damages = fullDamages
 
       if (damages > 0) description += s" for ${damages} hp!"
       else description += s"... but it did not do anything!"
-
-      description += s" (${Console.RED}$fullDamages${Console.RESET} - ${Console.BLUE}${d.spellReduction}${Console.RESET})"
 
       println(s"\t$description")
 
