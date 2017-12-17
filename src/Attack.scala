@@ -16,7 +16,7 @@ abstract case class Attack(name: String) extends Action[Creature] with Serializa
     assert((initialCreature != null) || (targetSelector != null))
 
     var oldDefender = defender
-    allStrikes.foreach(s => {
+    allStrikes.foreach(strike => {
       if (defender == null)
         defender = targetSelector(oldDefender)
 
@@ -27,6 +27,9 @@ abstract case class Attack(name: String) extends Action[Creature] with Serializa
 
       println(s"\t${attacker.name} targets ${defender.name}...")
 
+      val bonus = attacker.attackBonusAgainst(defender.creatureType)
+      val fullStrike = strike + bonus
+
       val roll = Dice.d20.roll()
 
       if (roll != 1) {
@@ -36,7 +39,7 @@ abstract case class Attack(name: String) extends Action[Creature] with Serializa
         if (roll == 20) {
           pierceDefence = true
 
-          if ((Dice.d20.roll() + s) > defender.armor) {
+          if ((Dice.d20.roll() + fullStrike) > defender.armor) {
             isCritical = true
 
             println(s"\t${Console.BLUE}Critical hit!${Console.RESET}")
@@ -46,19 +49,19 @@ abstract case class Attack(name: String) extends Action[Creature] with Serializa
           }
         }
         else {
-          val totalArmorBreak = roll + s;
+          val totalArmorBreak = roll + fullStrike
           pierceDefence = (totalArmorBreak > defender.armor)
         }
 
         if (pierceDefence) {
-          var fullDamages = damageFormula.compute(isCritical)
-
-          var damages = fullDamages - defender.damageReduction
+          val baseDamages = damageFormula.compute(isCritical)
+          val fullDamages = baseDamages + bonus
+          val damages = fullDamages - defender.damageReduction
 
           var description = describe(attacker, defender)
 
           if (damages > 0) {
-            description += s" for ${damages} (${Console.RED}${fullDamages}${Console.RESET} - ${Console.BLUE}${defender.damageReduction}${Console.RESET}) hp!"
+            description += s" for ${damages} hp! ((${Console.RED}${baseDamages} ${Console.MAGENTA}+ ${bonus}${Console.RESET}) - ${Console.BLUE}${defender.damageReduction}${Console.RESET})"
 
             defender.takeDamages(damages)
             total += damages
@@ -69,7 +72,7 @@ abstract case class Attack(name: String) extends Action[Creature] with Serializa
           println(s"\t$description")
 
           if (!defender.isAlive()) {
-            println(s"${Console.RED}\t${defender.name} was slained by ${attacker.name}!${Console.RESET}")
+            println(s"${Console.RED}\t${defender.name} was slain by ${attacker.name}!${Console.RESET}")
           }
         }
         else {
@@ -87,6 +90,9 @@ abstract case class Attack(name: String) extends Action[Creature] with Serializa
         else
           oldDefender = null
 
+        defender = null
+      }
+      else if (!defender.isAlive()) {
         defender = null
       }
     })

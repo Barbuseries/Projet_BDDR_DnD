@@ -8,18 +8,24 @@ import scala.collection.mutable.ArrayBuffer
 import scala.reflect.ClassTag
 
 object Relationship extends Enumeration {
-  val Ally, Enemy = Value
+  val Ally, Enemy, All = Value
+}
+
+object CreatureType extends Enumeration {
+  val Angel, Orc, Dragon = Value
 }
 
 abstract class Creature(val name : String) extends Serializable {
   type Message[T] = EdgeContext[Int, Relationship.Value, T]
+  type Mapper[T] = (Message[T], Creature, Int) => Unit
+  type Reducer[T] = (T, T) => T
+
+  // We only ever send to src, so we do not need an Array
+  class Result[T](val value: T) extends Serializable {
+  }
 
   class Context(val id: VertexId, val graph: World, val store: Broadcast[CreatureStore.type]) extends Serializable {
     // TODO: As the creature is fetched anyway (to know if it is alive, pass it as parameter to the map function)
-    private type Mapper[T] = (Message[T], Int) => Unit
-    private type Reducer[T] = (T, T) => T
-    private type Result[T] = Array[(VertexId, T)]
-
     def onLinked[T: ClassTag](recipient: (Message[T]) => Boolean,
                                       map: Mapper[T],
                                       reduce: Reducer[T]): Result[T] = {
@@ -29,21 +35,23 @@ abstract class Creature(val name : String) extends Serializable {
           // if we use a directed graph representation (we which do), with one edge between each vertex
           // (currently, there are two (one for each direction because we want an undirected graph)).
           val linkedToMe = (edge.srcId == id)
-          val data = edge.dstAttr
+          val key = edge.dstAttr
 
           if (linkedToMe) {
             if (recipient(edge)) {
-              val creature = store.value.get(data)
+              val creature = store.value.get(key)
 
               if (creature.isAlive()) {
-                map(edge, data)
+                map(edge, creature, key)
               }
             }
           }
         },
         (a, b) => reduce(a, b)).collect()
 
-      return result
+      if (result.length == 0) return null
+
+      return new Result(result(0)._2)
     }
 
     def onAllies[T: ClassTag](map: Mapper[T], reduce: Reducer[T]): Result[T] =
@@ -55,6 +63,8 @@ abstract class Creature(val name : String) extends Serializable {
     def onAll[T: ClassTag](map: Mapper[T], reduce: Reducer[T]): Result[T] =
       onLinked[T]((e) => true, map, reduce)
   }
+
+  var creatureType: CreatureType.Value = _
 
   var initiative: Int = 0
 
@@ -72,7 +82,11 @@ abstract class Creature(val name : String) extends Serializable {
   // does it really belong here?
   var regeneration: Int = 0
 
-  var allAttacks: ArrayBuffer[Attack] = ArrayBuffer.empty[Attack]
+  // NOTE: This is actually only useful when doing Angel Slayer -> Angel attack.
+  var typeBonusOnAttack: List[(CreatureType.Value, Int)] = List()
+
+  var allAttacks: List[Attack] = List()
+  // NOTE: spells are removed after they have been use
   var allSpells: ArrayBuffer[Spell[_]] = ArrayBuffer.empty[Spell[_]]
 
   def init(): Unit = {
@@ -97,17 +111,14 @@ abstract class Creature(val name : String) extends Serializable {
   }
 
   protected def think(context: Context): Boolean = {
-    // TODO (way later): Ask allies if they need anything
     if(healAllies(context)) return true
 
     // TODO: Change to use a custom strength evaluation function
     val strategy = (previousTarget : Creature) => {
-      if (previousTarget != null) {
+      if (previousTarget != null)
         previousTarget
-      }
-      else {
+      else
         findWeakestEnemy(context)
-      }
     }
 
     if (attack(strategy)) return true
@@ -132,6 +143,13 @@ abstract class Creature(val name : String) extends Serializable {
 
   def isAlive(): Boolean = {
     return health > 0
+  }
+
+  def attackBonusAgainst(creatureType: CreatureType.Value): Int = {
+    val result = typeBonusOnAttack.find(_._1 == creatureType)
+
+    if (!result.isEmpty) return result.head._2
+    else return 0
   }
 
   def takeDamages(amount: Int): Unit = {
@@ -176,9 +194,7 @@ abstract class Creature(val name : String) extends Serializable {
     if (healingSpells.length == 0) return false
 
     val tempResult = context.onAllies[(Int, Float)](
-      (e, key) => {
-          val creature = context.store.value.get(key)
-        
+      (e, creature, key) => {
           val healRatio = creature.getHealthP()
 
           // TODO: Either ask the creature or set a threshold
@@ -189,10 +205,10 @@ abstract class Creature(val name : String) extends Serializable {
       // min health ratio
       (a, b)  => if (b._2 > a._2) a else b)
 
-    if (tempResult.length == 0) return false
+    if (tempResult == null) return false
 
     val onlyMonoForNow = healingSpells.filter(_.isInstanceOf[MonoHealingSpell])
-    val target = context.store.value.get(tempResult(0)._2._1)
+    val target = context.store.value.get(tempResult.value._1)
     // TODO: Get the most useful
     val spell = onlyMonoForNow(0).asInstanceOf[MonoHealingSpell]
     spell.apply(this, target, null)
@@ -210,24 +226,28 @@ abstract class Creature(val name : String) extends Serializable {
   }
 
   def getHealthP(): Float = {
-    val result = health / maxHealth
+    val result = (1.0f * health) / maxHealth
     return result
   }
 
   // Ask entities with the given relationship what their life is. Return the one with the lowest health.
   private def findWeakest(context: Context, relationship: Relationship.Value)(): Creature = {
-    val tempResult = context.onLinked[(Int, Int)](
-      (e) =>  e.attr == relationship,
+    var tempResult: Result[(Int, Int)] = null
 
-      (e, key: Int) => {
-        val creature = context.store.value.get(key)
-        e.sendToSrc((key, creature.health))
-      },
-      (a, b) => if (a._2 > b._2) b else a)
+    val mapper: Mapper[(Int, Int)] = (e, creature, key) => {
+      e.sendToSrc((key, creature.health))
+    }
 
-    if (tempResult.length == 0) return null
+    val reducer: Reducer[(Int, Int)] = (a, b) => if (a._2 > b._2) b else a
 
-    val result = context.store.value.get(tempResult(0)._2._1)
+    if (relationship == Relationship.All)
+      tempResult = context.onAll[(Int, Int)](mapper, reducer)
+    else
+      tempResult = context.onLinked[(Int, Int)]((e) => e.attr == relationship, mapper, reducer)
+
+    if (tempResult == null) return null
+
+    val result = context.store.value.get(tempResult.value._1)
 
     return result
   }
@@ -235,19 +255,18 @@ abstract class Creature(val name : String) extends Serializable {
   private def findWeakestEnemy(context: Context)(): Creature = findWeakest(context, Relationship.Enemy)
 
   protected def findRandomEnemy(context: Context)() : Creature = {
-    val tempResult = context.onEnemies[Int](
-      (e, key) => {
-        val creature = context.store.value.get(key)
-
-        if (creature.isAlive()) {
-          e.sendToSrc(key)
-        }
+    val tempResult = context.onEnemies[List[Int]](
+      (e, creature, key) => {
+          e.sendToSrc(List(key))
       },
-      (a, b)  => if (Dice.d10.roll() <= 5) a else b)
+      (a, b)  => a ++ b)
 
-    if (tempResult.length == 0) return null
+    if (tempResult == null) return null
 
-    val result = tempResult(0)._2
+    val enemies = tempResult.value
+    val randomIndex = new Dice(enemies.length).roll() - 1
+
+    val result = enemies(randomIndex)
     return context.store.value.get(result)
   }
 
@@ -261,7 +280,11 @@ abstract class Creature(val name : String) extends Serializable {
 }
 
 object Bestiary {
-  case class Solar() extends Creature("Solar") {
+  abstract class Angel(override val name: String) extends Creature(name) {
+    creatureType = CreatureType.Angel
+  }
+
+  case class Solar() extends Angel("Solar") {
     healthFormula = new Formula(22, Dice.d10, 242)
 
     initiative = 9
@@ -272,8 +295,7 @@ object Bestiary {
     spellReduction = 34
 
     // TODO: Range attacks
-    allAttacks += DancingGreatSword
-    allAttacks += SolarSlam
+    allAttacks = List(DancingGreatSword, SolarSlam)
 
     addSpell(CureLightWounds, 3)
     addSpell(CureModerateWounds, 2)
@@ -281,7 +303,7 @@ object Bestiary {
     addSpell(CureCriticalWounds, 3)
   }
 
-  case class Planetar() extends Creature("Planetar") {
+  case class Planetar() extends Angel("Planetar") {
     healthFormula = new Formula(17, Dice.d10, 136)
 
     initiative = 8
@@ -292,15 +314,14 @@ object Bestiary {
     spellReduction = 27
 
     // TODO: Range attacks
-    allAttacks += HolyGreatSword
-    allAttacks += PlanetarSlam
+    allAttacks = List(HolyGreatSword, PlanetarSlam)
 
     addSpell(CureLightWounds, 4)
     addSpell(CureModerateWounds, 2)
     addSpell(CureSeriousWounds, 2)
   }
 
-  case class MovanicDeva() extends Creature("Movanic Deva") {
+  case class MovanicDeva() extends Angel("Movanic Deva") {
     healthFormula = new Formula(12, Dice.d10, 60)
 
     initiative = 7
@@ -310,13 +331,13 @@ object Bestiary {
     spellReduction = 21
 
     // TODO: Ranged attacks
-    allAttacks += FlamingGreatSword
+    allAttacks = List(FlamingGreatSword)
 
     // NOTE: It says "7/day"
     addSpell(CureSeriousWounds, 7)
   }
 
-  case class AstralDeva() extends Creature("Astral Deva") {
+  case class AstralDeva() extends Angel("Astral Deva") {
     healthFormula = new Formula(15, Dice.d10, 90)
 
     initiative = 8
@@ -326,14 +347,15 @@ object Bestiary {
     spellReduction = 25
 
     // TODO: Ranged attacks
-    allAttacks += DisruptingWarhammer
-    allAttacks += AstralSlam
+    allAttacks = List(DisruptingWarhammer, AstralSlam)
 
     addSpell(CureSeriousWounds, 7)
   }
 
   case class GreenGreatWyrmDragon() extends Creature("Green Great Wyrm Dragon") {
     healthFormula = new Formula(27, Dice.d12, 216)
+
+    creatureType = CreatureType.Dragon
 
     initiative = 2
     armor = 37
@@ -342,13 +364,12 @@ object Bestiary {
     spellReduction = 31
 
     // TODO: Ranged attacks
-    allAttacks += DragonBite
-    allAttacks += Claw
-    allAttacks += Wings
-    allAttacks += TailSlap
+    allAttacks = List(DragonBite, Claw, Wings, TailSlap)
   }
 
   abstract class Orc(override val name: String) extends Creature(name) {
+    creatureType = CreatureType.Orc
+
     override protected def think(context: Context): Boolean = {
       val strategy = (c: Creature) => findRandomEnemy(context)
 
@@ -363,7 +384,7 @@ object Bestiary {
     armor = 15
 
     // TODO: Ranged attacks
-    allAttacks += GreatAxe
+    allAttacks = List(GreatAxe)
   }
 
   case class AngelSlayer() extends Orc("Angel Slayer") {
@@ -373,8 +394,9 @@ object Bestiary {
     armor = 26
 
     // TODO: Ranged attacks
-    allAttacks += DoubleAxe
-    allAttacks += DoubleAxe2
+    allAttacks = List(DoubleAxe, DoubleAxe2)
+
+    typeBonusOnAttack = List((CreatureType.Angel, 8))
   }
 
   case class WorgRider() extends Orc("Worg Rider") {
@@ -384,7 +406,7 @@ object Bestiary {
     armor = 18
 
     // TODO: Range attacks
-    allAttacks += MWKBattleAxe
+    allAttacks = List(MWKBattleAxe)
   }
 
   case class Warlord() extends Orc("Warlord") {
@@ -394,8 +416,7 @@ object Bestiary {
     armor = 27
 
     // TODO: Range attacks
-    allAttacks += ViciousFlail
-    allAttacks += LionShield
+    allAttacks = List(ViciousFlail, LionShield)
   }
 
   case class BarbaresOrc() extends Orc("Barbares Orc") {
@@ -407,8 +428,6 @@ object Bestiary {
     damageReduction = 3
 
     // TODO: Range attacks
-    allAttacks += OrcDoubleAxe
-    allAttacks += OrcDoubleAxe2
-    allAttacks += OrcBite
+    allAttacks = List(OrcDoubleAxe, OrcDoubleAxe2, OrcBite)
   }
 }
