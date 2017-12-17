@@ -112,7 +112,7 @@ abstract class Creature(val name : String) extends Serializable {
     assert(amount > 0)
     health -= amount
 
-    if (health < 0) {
+    if (health <= 0) {
       health = 0
 
       println(s"\t${Console.RED}${name} was slain by ${attacker.name}!${Console.RESET}")
@@ -348,8 +348,7 @@ object Bestiary {
     damageReduction = 15
     spellReduction = 34
 
-    // TODO: Range attacks
-    allAttacks = List(List(DancingGreatSword)/*, SolarSlam*/)
+    allAttacks = List(List(DancingGreatSword)/*, SolarSlam*/, List(CompositeLongbow))
 
     addSpell(CureLightWounds, 3)
     addSpell(CureModerateWounds, 2)
@@ -417,7 +416,6 @@ object Bestiary {
     damageReduction = 20
     spellReduction = 31
 
-    // TODO: Ranged attacks
     allAttacks = List(List(DragonBite, Claw, Wings, TailSlap), List(AcidBreath))
 
     addSpell(AlterSelf)
@@ -507,6 +505,9 @@ object Bestiary {
           println(s"\t${Console.CYAN}${name} rushes its prey!${Console.RESET}")
         }
       }
+      else if (Main.round < Main.roundFightIsMelee) {
+        println(s"\t${Console.CYAN}${name} rushes its prey!${Console.RESET}")
+      }
 
       return attackAccordingTo(strategy)
     }
@@ -518,8 +519,7 @@ object Bestiary {
     initiative = 1
     armor = 15
 
-    // TODO: Ranged attacks
-    allAttacks = List(List(GreatAxe))
+    allAttacks = List(List(GreatAxe), List(OrcThrowingAxe))
   }
 
   case class AngelSlayer() extends Orc("Angel Slayer") {
@@ -528,8 +528,7 @@ object Bestiary {
     initiative = 7
     armor = 26
 
-    // TODO: Ranged attacks
-    allAttacks = List(List(DoubleAxe, DoubleAxe2))
+    allAttacks = List(List(DoubleAxe, DoubleAxe2), List(MWKCompositeLongbow2))
 
     typeBonusOnAttack = List((CreatureType.Angel, 8))
   }
@@ -540,8 +539,7 @@ object Bestiary {
     initiative = 2
     armor = 18
 
-    // TODO: Range attacks
-    allAttacks = List(List(MWKBattleAxe))
+    allAttacks = List(List(MWKBattleAxe), List(ShortBow))
   }
 
   case class Warlord() extends Orc("Warlord") {
@@ -550,8 +548,7 @@ object Bestiary {
     initiative = 2
     armor = 27
 
-    // TODO: Range attacks
-    allAttacks = List(List(ViciousFlail, LionShield), List(ViciousFlail2))
+    allAttacks = List(List(ViciousFlail, LionShield), List(ViciousFlail2), List(MWKThrowingAxe))
   }
 
   case class BarbaresOrc() extends Orc("Barbares Orc") {
@@ -562,7 +559,6 @@ object Bestiary {
 
     damageReduction = 3
 
-    // TODO: Range attacks
-    allAttacks = List(List(OrcDoubleAxe), List(OrcDoubleAxe2, OrcDoubleAxe3, OrcBite))
+    allAttacks = List(List(OrcDoubleAxe), List(OrcDoubleAxe2, OrcDoubleAxe3, OrcBite), List(MWKCompositeLongbow))
   }
 }

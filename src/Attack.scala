@@ -104,6 +104,7 @@ abstract case class Attack(name: String) extends Action[Creature] with Serializa
   }
 }
 
+// NOTE: The dragon flies around, so it can only be attacked with ranged attacks
 abstract class MeleeAttack(name: String) extends Attack(name) {
   override def canApply(attacker: Creature, defender: Creature): Boolean = {
     return (Main.round >= Main.roundFightIsMelee) && (defender.creatureType != CreatureType.Dragon)
@@ -111,13 +112,13 @@ abstract class MeleeAttack(name: String) extends Attack(name) {
 }
 
 abstract class RangeAttack(name: String) extends Attack(name) {
-  // The dragon flies around, so it can only be attacked with ranged attacks
   override def canApply(attacker: Creature, defender: Creature): Boolean = {
     return ((Main.round >= Main.roundFightStarts) &&
            ((Main.round < Main.roundFightIsMelee) || (defender.creatureType == CreatureType.Dragon)))
   }
 }
 
+// Melee Attacks
 class Axe(name: String) extends MeleeAttack(name) {
   override def describe(a: Creature, d: Creature): String = {
     return s"A swift swing from ${a.name}'s ${name} into ${d.name}"
@@ -152,6 +153,19 @@ class Flail(name: String) extends MeleeAttack(name) {
   }
 }
 
+// Ranged Attacks
+class Bow(name: String) extends RangeAttack(name) {
+  override def describe(a: Creature, d: Creature): String = {
+    return s"${a.name}'s ${name} struck ${d.name}"
+  }
+}
+
+class ThrowingAxe(name: String) extends RangeAttack(name) {
+  override def describe(a: Creature, d: Creature): String = {
+    return s"${a.name} throws its ${name} at ${d.name}"
+  }
+}
+
 // Solar
 object DancingGreatSword extends Sword("+5 dancing greatsword") {
   allStrikes = ArrayBuffer[Int](35, 30, 25, 20)
@@ -163,10 +177,20 @@ object SolarSlam extends Slam {
   damageFormula = new Formula(2, Dice.d8, 13)
 }
 
+object CompositeLongbow extends Bow("+5 composite longbow") {
+  allStrikes = ArrayBuffer[Int](31, 26, 21, 16)
+  damageFormula = new Formula(2, Dice.d6, 14)
+}
+
 // Worg Rider
 object MWKBattleAxe extends Axe("mwk battleaxe") {
   allStrikes = ArrayBuffer[Int](6)
   damageFormula = new Formula(1, Dice.d8, 2)
+}
+
+object ShortBow extends Bow("short bow") {
+  allStrikes = ArrayBuffer[Int](4)
+  damageFormula = new Formula(1, Dice.d6, 0)
 }
 
 // Warlord
@@ -189,7 +213,12 @@ object LionShield extends MeleeAttack("lion's shield") {
   }
 }
 
-// Barbares Orc
+object MWKThrowingAxe extends ThrowingAxe("mwk throwing axe") {
+  allStrikes = ArrayBuffer[Int](19)
+  damageFormula = new Formula(1, Dice.d6, 5)
+}
+
+// Barbares Orc (Double Axe Fury)
 object OrcDoubleAxe extends Axe("+1 orc double axe") {
   allStrikes = ArrayBuffer[Int](19, 14, 9)
   damageFormula = new Formula(1, Dice.d8, 10)
@@ -210,10 +239,20 @@ object OrcBite extends Bite {
   damageFormula = new Formula(1, Dice.d4, 3)
 }
 
-// Orc Barbarian
+object MWKCompositeLongbow extends Bow("mwk composite longbow") {
+  allStrikes = ArrayBuffer[Int](16, 11, 6)
+  damageFormula = new Formula(1, Dice.d8, 6)
+}
+
+// Orc Barbarian (Greataxe orc)
 object GreatAxe extends Axe("great axe") {
   allStrikes = ArrayBuffer[Int](11)
   damageFormula = new Formula(1, Dice.d12, 10)
+}
+
+object OrcThrowingAxe extends ThrowingAxe("throwing axe") {
+  allStrikes = ArrayBuffer[Int](5)
+  damageFormula = new Formula(1, Dice.d6, 7)
 }
 
 // Green Great Wyrm Dragon
@@ -301,4 +340,9 @@ object DoubleAxe extends Axe("+1 good outsider-bane orc double axe") {
 object DoubleAxe2 extends Axe("+1 orc double axe") {
   allStrikes = ArrayBuffer[Int](21, 16, 11)
   damageFormula = new Formula(1, Dice.d8, 7)
+}
+
+object MWKCompositeLongbow2 extends Bow("mwk composite longbow") {
+  allStrikes = ArrayBuffer[Int](19, 14, 9)
+  damageFormula = new Formula(1, Dice.d8, 6)
 }
