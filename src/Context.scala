@@ -18,7 +18,8 @@ object Context {
 class Context(val id: VertexId, val graph: World, val store: Broadcast[CreatureStore.type]) extends Serializable {
   def onLinked[T: ClassTag](recipient: (Message[T]) => Boolean,
                             map: Mapper[T],
-                            reduce: Reducer[T]): Result[T] = {
+                            reduce: Reducer[T],
+                            includeSelf: Boolean = false): Result[T] = {
     val result = graph.aggregateMessages[T](
       edge => {
         // NOTE: We could check for ((edge.srcId == id) || (edge.dstId == id))
@@ -28,11 +29,15 @@ class Context(val id: VertexId, val graph: World, val store: Broadcast[CreatureS
         val key = edge.dstAttr
 
         if (linkedToMe) {
-          if (recipient(edge)) {
-            val creature = store.value.get(key)
+          val isMe = (edge.dstId == id)
 
-            if (creature.isAlive()) {
-              map(edge, creature, key)
+          if (!isMe || (isMe && includeSelf)) {
+            if (recipient(edge)) {
+              val creature = store.value.get(key)
+
+              if (creature.isAlive()) {
+                map(edge, creature, key)
+              }
             }
           }
         }
@@ -44,12 +49,12 @@ class Context(val id: VertexId, val graph: World, val store: Broadcast[CreatureS
     return new Result(result(0)._2)
   }
 
-  def onAllies[T: ClassTag](map: Mapper[T], reduce: Reducer[T]): Result[T] =
-    onLinked[T]((e) => e.attr == Relationship.Ally, map, reduce)
+  def onAllies[T: ClassTag](map: Mapper[T], reduce: Reducer[T], includeSelf: Boolean = false): Result[T] =
+    onLinked[T]((e) => e.attr == Relationship.Ally, map, reduce, includeSelf)
 
   def onEnemies[T: ClassTag](map: Mapper[T], reduce: Reducer[T]): Result[T] =
-    onLinked[T]((e) => e.attr == Relationship.Enemy, map, reduce)
+    onLinked[T]((e) => e.attr == Relationship.Enemy, map, reduce, false)
 
-  def onAll[T: ClassTag](map: Mapper[T], reduce: Reducer[T]): Result[T] =
-    onLinked[T]((e) => true, map, reduce)
+  def onAll[T: ClassTag](map: Mapper[T], reduce: Reducer[T], includeSelf: Boolean = false): Result[T] =
+    onLinked[T]((e) => true, map, reduce, includeSelf)
 }

@@ -40,7 +40,11 @@ object Main {
   }
 
   def inverseEdges[T](edges: ArrayBuffer[Edge[T]]): ArrayBuffer[Edge[T]] = {
-    return edges.map(e => Edge(e.dstId, e.srcId, e.attr))
+    return edges.map(e => {
+      // In case the edge is a goes from and to the same vertex, no need to invert it.
+      if (e.dstId != e.srcId) Edge(e.dstId, e.srcId, e.attr)
+      else null
+    }).filterNot(_ == null)
   }
 
   def buildFightOne(allies: Team, enemies: Team): Unit = {
@@ -62,8 +66,8 @@ object Main {
     allies.add(AstralDeva(), 5)
 
     enemies.add(GreenGreatWyrmDragon())
-    enemies.add(OrcBarbarian(), 200)
-    enemies.add(AngelSlayer(), 10)
+    //enemies.add(OrcBarbarian(), 200)
+    //enemies.add(AngelSlayer(), 10)
 
     roundFightStarts = 3
     roundFightIsMelee = 7
@@ -153,13 +157,8 @@ object Main {
       (a, b) => (a._1 + b._1, a._2 + b._2)
     ).collect().head
 
-    var allyCount = teamAliveCount._2._1
+    val allyCount = teamAliveCount._2._1
     val enemyCount = teamAliveCount._2._2
-
-    // Get solar status
-    if (store.value.get(0).isAlive()) {
-      allyCount += 1
-    }
 
     val alliesAlive  = (allyCount != 0)
     val enemiesAlive = (enemyCount != 0)

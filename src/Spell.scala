@@ -25,7 +25,14 @@ object DummyFireSpell extends MultipleTargetsSpell("Fire spell") {
 }
 
 abstract class HealingSpell[T](override val name: String) extends Spell[T](name) {
-  override def describe(a: Creature, d: Creature): String = s"${a.name} uses ${name} to heal ${d.name}"
+  override def describe(a: Creature, d: Creature): String =  {
+    var dName = d.name
+    if (a eq d) {
+      dName = "itself"
+    }
+
+    return s"${a.name} uses ${name} to heal ${d.name}"
+  }
   override def canApply(user: Creature, target: Creature) : Boolean = target.getHealthP() < 1
 }
 

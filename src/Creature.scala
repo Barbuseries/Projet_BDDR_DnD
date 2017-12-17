@@ -235,6 +235,19 @@ abstract class Creature(val name : String) extends Serializable {
     return context.store.value.get(result)
   }
 
+  protected def findDragon(context: Context): Creature = {
+    val result = context.onEnemies[Int]((e, creature, key) => {
+      creature.creatureType match {
+        case CreatureType.Dragon => e.sendToSrc(key)
+        case _ =>
+      }
+    },
+      (a, b) => a)
+
+    if (result == null) return null
+    return context.store.value.get(result.value)
+  }
+
   protected def addSpell(s: Spell[_], count: Int): Unit = {
     allSpells ++= (1 to count).map(_ => s)
   }
@@ -262,19 +275,6 @@ object Bestiary {
       return context.store.value.get(result.value._1)
     }
 
-    private def findDragon(context: Context): Creature = {
-      val result = context.onEnemies[Int]((e, creature, key) => {
-        creature.creatureType match {
-          case CreatureType.Dragon => e.sendToSrc(key)
-          case _ =>
-        }
-      },
-        (a, b) => a)
-
-      if (result == null) return null
-      return context.store.value.get(result.value)
-    }
-
     protected def healAllies(context: Context): Boolean = {
       // TODO: Implement something based on either a spell type or a spell target (allies and or enemies)
       val healingSpells = allSpells.filter(_.isInstanceOf[HealingSpell[_]])
@@ -288,6 +288,7 @@ object Bestiary {
 
       // TODO: Count the number of allies that needs to be healed.
       // If count > threshold, use mass heal spell.
+      val includeSelf = true
       val tempResult = context.onAllies[(Int, Float)](
         (e, creature, key) => {
           val healRatio = creature.getHealthP()
@@ -298,7 +299,8 @@ object Bestiary {
           }
         },
         // min health ratio
-        (a, b)  => if (b._2 > a._2) a else b)
+        (a, b)  => if (b._2 > a._2) a else b,
+        includeSelf)
 
       if (tempResult == null) return false
 
@@ -317,6 +319,8 @@ object Bestiary {
           case 0 => println(s"\t${name} is wary...")
           case _ => println(s"\t${name} sees a frighten villager!")
         }
+
+        return true
       }
 
       if(healAllies(context)) return true
@@ -431,7 +435,7 @@ object Bestiary {
 
     addSpell(AlterSelf)
 
-    val roundsBetweenAttacks = 3
+    val roundsBetweenAttacks = 2
     var remainingRoundsBeforeAttack = 0
 
     private def roundWhenCloseEnough(): Int = {
@@ -512,6 +516,14 @@ object Bestiary {
 
       return played
     }
+
+    def healMe(): Boolean = {
+      if (getHealthP() < 0.5f) {
+        if (new Dice(42).roll() == 42) return true
+      }
+
+      return false
+    }
   }
 
   abstract class Orc(override val name: String) extends Creature(name) {
@@ -558,8 +570,26 @@ object Bestiary {
     armor = 26
 
     allAttacks = List(List(DoubleAxe, DoubleAxe2), List(MWKCompositeLongbow2))
+    addSpell(CureModerateWounds)
 
     typeBonusOnAttack = List((CreatureType.Angel, 8))
+
+    override protected def think(context: Context): Boolean = {
+      if (allSpells.length != 0) {
+        val dragon = findDragon(context)
+
+        if ((dragon != null) && (dragon.asInstanceOf[GreenGreatWyrmDragon].healMe())) {
+            // NOTE: This is actually never reached, because angels only start attacking the dragon
+            // when all angel slayers have been defeated.
+            val healSpell = allSpells(0).asInstanceOf[MonoHealingSpell]
+            useSpell(healSpell, dragon, null)
+
+            return true
+        }
+      }
+
+      return super.think(context)
+    }
   }
 
   case class WorgRider() extends Orc("Worg Rider") {

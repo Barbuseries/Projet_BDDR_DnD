@@ -28,9 +28,10 @@ class Team () {
     return result
   }
 
-  // TODO: Store more information inside the edges (last Int field).
+  // FIXME?: To make some decisions easier, there is an edge from each vertex onto itself.
+  // Does the edge data (Relationship.Value) needs to be different for this one?
   def edges(): ArrayBuffer[Edge[Relationship.Value]] = {
-    val result = for (i <- 0 until members.length; j <- (i + 1) until members.length) yield Edge(i.toLong, j.toLong, Relationship.Ally)
+    val result = for (i <- 0 until members.length; j <- i until members.length) yield Edge(i.toLong, j.toLong, Relationship.Ally)
 
     return result.to[mutable.ArrayBuffer]
   }
