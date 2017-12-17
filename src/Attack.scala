@@ -25,11 +25,6 @@ abstract case class Attack(name: String) extends Action[Creature] with Serializa
       if (defender == null)
          return defender
 
-      if (!defender.isAlive()) {
-        println(oldDefender)
-        println(defender.name)
-        println(defender.health)
-      }
       assert(defender.isAlive())
 
       println(s"\t${attacker.name} targets ${defender.name}...")
@@ -109,19 +104,33 @@ abstract case class Attack(name: String) extends Action[Creature] with Serializa
   }
 }
 
-class Axe(name: String) extends Attack(name) {
+abstract class MeleeAttack(name: String) extends Attack(name) {
+  override def canApply(attacker: Creature, defender: Creature): Boolean = {
+    return (Main.round >= Main.roundFightIsMelee) && (defender.creatureType != CreatureType.Dragon)
+  }
+}
+
+abstract class RangeAttack(name: String) extends Attack(name) {
+  // The dragon flies around, so it can only be attacked with ranged attacks
+  override def canApply(attacker: Creature, defender: Creature): Boolean = {
+    return ((Main.round >= Main.roundFightStarts) &&
+           ((Main.round < Main.roundFightIsMelee) || (defender.creatureType == CreatureType.Dragon)))
+  }
+}
+
+class Axe(name: String) extends MeleeAttack(name) {
   override def describe(a: Creature, d: Creature): String = {
     return s"A swift swing from ${a.name}'s ${name} into ${d.name}"
   }
 }
 
-class Bite(name: String = "bite") extends Attack(name) {
+class Bite(name: String = "bite") extends MeleeAttack(name) {
   override def describe(a: Creature, d: Creature): String = {
     return s"${a.name} bites ${d.name}"
   }
 }
 
-class Sword(name: String) extends Attack(name) {
+class Sword(name: String) extends MeleeAttack(name) {
   override def describe(a: Creature, d: Creature): String = {
     val allBodyParts = Array[String]("arm", "leg", "torso", "back",
       "head", "shoulder", "thigh", "knee")
@@ -131,13 +140,13 @@ class Sword(name: String) extends Attack(name) {
   }
 }
 
-class Slam(name: String = "slam") extends Attack(name) {
+class Slam(name: String = "slam") extends MeleeAttack(name) {
   override def describe(a: Creature, d: Creature): String = {
     return s"${a.name} slamed into ${d.name}"
   }
 }
 
-class Flail(name: String) extends Attack(name) {
+class Flail(name: String) extends MeleeAttack(name) {
   override def describe(a: Creature, d: Creature): String = {
     return s"A powerful swing from ${a.name}'s ${name} into ${d.name}"
   }
@@ -171,7 +180,7 @@ object ViciousFlail2 extends Flail("+1 vicious flail") {
   damageFormula = new Formula(1, Dice.d8, 10)
 }
 
-object LionShield extends Attack("lion's shield") {
+object LionShield extends MeleeAttack("lion's shield") {
   allStrikes = ArrayBuffer[Int](23)
   damageFormula = new Formula(1, Dice.d4, 6)
 
@@ -213,6 +222,8 @@ object DragonBite extends Bite {
   damageFormula = new Formula(4, Dice.d8, 21)
 }
 
+// FIXME/NOTE: The dragon's attacks are not set to melee,
+// because it rushes Solar before the fight even starts.
 // TODO/FIXME: The wiki says the dragon can do _two_ claws.
 // Currently, the only way to do this is to have two strikes.
 // In the end, it is the same. But who knows...
@@ -267,7 +278,7 @@ object FlamingGreatSword extends Sword("+1 flaming greatsword") {
 }
 
 // Astral Deva
-object DisruptingWarhammer extends Attack("+2 disrupting warhammer") {
+object DisruptingWarhammer extends MeleeAttack("+2 disrupting warhammer") {
   allStrikes = ArrayBuffer[Int](26, 21, 16)
   damageFormula = new Formula(1, Dice.d8, 14) // TODO: It says: 'plus stun'
 

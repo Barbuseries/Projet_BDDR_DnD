@@ -34,16 +34,18 @@ class BreathWeapon(val name: String) extends Action[List[Creature]] {
       // NOTE/FIXME: I can not wrap my mind around a Reflex save's throw calculation.
       // So I'm just going for this.... Sorry.
       val saved = (savingThrowDice.roll() < 10)
-      var damages = damageFormula.compute()
+      var fullDamages = damageFormula.compute()
 
       var description = describe(attacker, d)
 
       if (saved) {
-        damages /= 2
+        fullDamages /= 2
         description += s" (saved)"
       }
 
-      description += s" for ${damages} hp!"
+      val damages = fullDamages - d.spellReduction
+
+      description += s" for ${damages} hp! (${Console.RED}$fullDamages${Console.RESET} - ${Console.BLUE}${d.spellReduction}${Console.RESET})"
 
       println(s"\t$description")
 

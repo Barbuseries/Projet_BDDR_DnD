@@ -305,6 +305,13 @@ object Bestiary {
     }
 
     override protected def think(context: Context): Boolean = {
+      if ((Main.fight == 1) && (Main.round < Main.roundFightStarts)) {
+        Main.round match {
+          case 0 => println(s"\t${name} is wary...")
+          case _ => println(s"\t${name} sees a frighten villager!")
+        }
+      }
+
       if(healAllies(context)) return true
 
       // TODO: Change to use a custom strength evaluation function
@@ -415,11 +422,11 @@ object Bestiary {
 
     addSpell(AlterSelf)
 
-    private var round = 0
-    // @HACK to simulate the behaviour until we have 3d movement (we won't, ever)
-    private val roundWhenCloseEnough = 5
+    private def roundWhenCloseEnough(): Int = {
+      return Main.roundFightStarts - 1
+    }
 
-    private def GetSolar(context: Context): Solar = {
+    private def getSolar(context: Context): Solar = {
       // As there is only one Solar, returning one is not too expensive (I think...)
       var result = context.onEnemies[Solar](
         (e, creature, key) => {
@@ -442,10 +449,10 @@ object Bestiary {
       return true
     }
 
-    private def thinkWhileHumanRounds(context: Context) : Boolean = {
-      val solar: Creature = GetSolar(context)
+    private def thinkWhileHuman(context: Context) : Boolean = {
+      val solar: Creature = getSolar(context)
 
-      if (round != roundWhenCloseEnough) {
+      if (Main.round != roundWhenCloseEnough()) {
         println(s"\t${name} gets closer to ${solar.name}...")
       }
       else {
@@ -453,6 +460,8 @@ object Bestiary {
         creatureType = CreatureType.Dragon
 
         attack(allAttacks.head, solar, (creature: Creature) => creature)
+
+        println(s"\t${name} takes off!")
       }
 
       return true
@@ -468,13 +477,11 @@ object Bestiary {
     }
 
     override protected def think(context: Context): Boolean = {
-      val played = round match {
+      val played = Main.round match {
         case 0 => thinkFirstRound(context)
-        case x if (x <= roundWhenCloseEnough) => thinkWhileHumanRounds(context)
+        case x if (x <= roundWhenCloseEnough()) => thinkWhileHuman(context)
         case _ => thinkRemainingFight(context)
       }
-
-      round += 1
 
       return played
     }
@@ -485,6 +492,21 @@ object Bestiary {
 
     override protected def think(context: Context): Boolean = {
       val strategy = (c: Creature) => findRandomEnemy(context)
+
+      if (Main.fight == 1) {
+        val stopHidingRound = Main.roundFightStarts - 1
+        if (Main.round < stopHidingRound) {
+          println(s"\t${Console.CYAN}${name} hides in a bush...${Console.RESET}")
+          return true
+        }
+        else if (Main.round == stopHidingRound) {
+          println(s"\t${Console.CYAN}${name} emerges from its bush!${Console.RESET}")
+          return true
+        }
+        else if (Main.round < Main.roundFightIsMelee) {
+          println(s"\t${Console.CYAN}${name} rushes its prey!${Console.RESET}")
+        }
+      }
 
       return attackAccordingTo(strategy)
     }

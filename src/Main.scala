@@ -8,6 +8,12 @@ import scala.collection.mutable.ArrayBuffer
 object Main {
   type World = Graph[Int, Relationship.Value]
 
+  // @HACK to simulate the behaviour until we have 3d movement (we won't, ever)
+  var fight = 0
+  var round = -1
+  var roundFightStarts = 0
+  var roundFightIsMelee = 0
+
   // TODO: To implement invocation spells (Summon 7), there needs to be a way to add vertices to the graph.
   def createGraph(sc: SparkContext, allies : Team, enemies : Team): World = {
     val allies_len = allies.members.length
@@ -43,6 +49,10 @@ object Main {
     enemies.add(WorgRider(), 9)
     enemies.add(Warlord())
     enemies.add(BarbaresOrc(), 4)
+
+    roundFightStarts = 0
+    roundFightIsMelee = 3
+    fight = 0
   }
 
   def buildFightTwo(allies: Team, enemies: Team): Unit = {
@@ -54,6 +64,10 @@ object Main {
     enemies.add(GreenGreatWyrmDragon())
     enemies.add(OrcBarbarian(), 200)
     enemies.add(AngelSlayer(), 10)
+
+    roundFightStarts = 3
+    roundFightIsMelee = 7
+    fight = 1
   }
 
   def main(args: Array[String]) {
@@ -79,6 +93,8 @@ object Main {
     var done = false
     var winners = 0
     while (!done) {
+      round += 1
+
       // FIXME: This is used to iterate over all elements in order (without having to keep an index around).
       //  There may (should) be a better way to do this (having to filter is bad), but I don't know it yet.
       orderList.foreach(id => {
