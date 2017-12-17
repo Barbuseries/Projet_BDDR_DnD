@@ -85,7 +85,7 @@ abstract class Creature(val name : String) extends Serializable {
   // NOTE: This is actually only useful when doing Angel Slayer -> Angel attack.
   var typeBonusOnAttack: List[(CreatureType.Value, Int)] = List()
 
-  var allAttacks: List[Attack] = List()
+  var meleeAttacks: List[List[Attack]] = List()
   // NOTE: spells are removed after they have been use
   var allSpells: ArrayBuffer[Spell[_]] = ArrayBuffer.empty[Spell[_]]
 
@@ -173,17 +173,21 @@ abstract class Creature(val name : String) extends Serializable {
     if (health > maxHealth) health = maxHealth
   }
 
+
   def attack(targetSelector: (Creature) => Creature): Boolean = {
-    val firstCreature = targetSelector(null)
+    var firstCreature = targetSelector(null)
     if (firstCreature == null) return false
 
-    val validAttacks = allAttacks.filter(_.canApply(this, firstCreature))
+    // Can aplly all attacks in the same list
+    val validAttacks = meleeAttacks.filter(_.map(_.canApply(this, firstCreature)).reduce((a, b) => a && b))
     if (validAttacks.length == 0) return false
 
     // TODO: Can be changed to rank based on min/max/average damages
     val choosenAttack = validAttacks(scala.util.Random.nextInt(validAttacks.length))
 
-    var damages = choosenAttack.apply(this, firstCreature, targetSelector)
+    var damages = choosenAttack.map((a) => {
+      firstCreature = a.apply(this, firstCreature, targetSelector)
+    })
 
     return true
   }
@@ -295,7 +299,7 @@ object Bestiary {
     spellReduction = 34
 
     // TODO: Range attacks
-    allAttacks = List(DancingGreatSword, SolarSlam)
+    meleeAttacks = List(List(DancingGreatSword)/*, SolarSlam*/)
 
     addSpell(CureLightWounds, 3)
     addSpell(CureModerateWounds, 2)
@@ -314,7 +318,7 @@ object Bestiary {
     spellReduction = 27
 
     // TODO: Range attacks
-    allAttacks = List(HolyGreatSword, PlanetarSlam)
+    meleeAttacks = List(List(HolyGreatSword)/*, PlanetarSlam*/)
 
     addSpell(CureLightWounds, 4)
     addSpell(CureModerateWounds, 2)
@@ -331,7 +335,7 @@ object Bestiary {
     spellReduction = 21
 
     // TODO: Ranged attacks
-    allAttacks = List(FlamingGreatSword)
+    meleeAttacks = List(List(FlamingGreatSword))
 
     // NOTE: It says "7/day"
     addSpell(CureSeriousWounds, 7)
@@ -347,7 +351,7 @@ object Bestiary {
     spellReduction = 25
 
     // TODO: Ranged attacks
-    allAttacks = List(DisruptingWarhammer, AstralSlam)
+    meleeAttacks = List(List(DisruptingWarhammer)/*, AstralSlam*/)
 
     addSpell(CureSeriousWounds, 7)
   }
@@ -364,7 +368,7 @@ object Bestiary {
     spellReduction = 31
 
     // TODO: Ranged attacks
-    allAttacks = List(DragonBite, Claw, Wings, TailSlap)
+    meleeAttacks = List(List(DragonBite, Claw, Wings, TailSlap))
   }
 
   abstract class Orc(override val name: String) extends Creature(name) {
@@ -384,7 +388,7 @@ object Bestiary {
     armor = 15
 
     // TODO: Ranged attacks
-    allAttacks = List(GreatAxe)
+    meleeAttacks = List(List(GreatAxe))
   }
 
   case class AngelSlayer() extends Orc("Angel Slayer") {
@@ -394,7 +398,7 @@ object Bestiary {
     armor = 26
 
     // TODO: Ranged attacks
-    allAttacks = List(DoubleAxe, DoubleAxe2)
+    meleeAttacks = List(List(DoubleAxe, DoubleAxe2))
 
     typeBonusOnAttack = List((CreatureType.Angel, 8))
   }
@@ -406,7 +410,7 @@ object Bestiary {
     armor = 18
 
     // TODO: Range attacks
-    allAttacks = List(MWKBattleAxe)
+    meleeAttacks = List(List(MWKBattleAxe))
   }
 
   case class Warlord() extends Orc("Warlord") {
@@ -416,7 +420,7 @@ object Bestiary {
     armor = 27
 
     // TODO: Range attacks
-    allAttacks = List(ViciousFlail, LionShield)
+    meleeAttacks = List(List(ViciousFlail, LionShield), List(ViciousFlail2))
   }
 
   case class BarbaresOrc() extends Orc("Barbares Orc") {
@@ -428,6 +432,6 @@ object Bestiary {
     damageReduction = 3
 
     // TODO: Range attacks
-    allAttacks = List(OrcDoubleAxe, OrcDoubleAxe2, OrcBite)
+    meleeAttacks = List(List(OrcDoubleAxe), List(OrcDoubleAxe2, OrcDoubleAxe3, OrcBite))
   }
 }

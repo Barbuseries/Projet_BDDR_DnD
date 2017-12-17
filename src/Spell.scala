@@ -19,8 +19,8 @@ object DummyFireSpell extends MultipleTargetsSpell("Fire spell") {
 
   override def apply(user: Creature,
                      target: List[Creature],
-                     targetSelector: (List[Creature]) => List[Creature]): Int = {
-    return 0
+                     targetSelector: (List[Creature]) => List[Creature]): Creature = {
+    return null
   }
 }
 
@@ -32,7 +32,7 @@ abstract class HealingSpell[T](override val name: String) extends Spell[T](name)
 abstract class MonoHealingSpell(override val name: String) extends HealingSpell[Creature](name) {
   override def apply(user: Creature,
                      target: Creature,
-                     targetSelector: (Creature) => Creature): Int = {
+                     targetSelector: (Creature) => Creature): Creature = {
     assert(damageFormula != null)
 
     // TODO?: only display actual heal (if (life + heal > maxLife))
@@ -43,7 +43,7 @@ abstract class MonoHealingSpell(override val name: String) extends HealingSpell[
     val description = describe(user, target)
     println(s"\t${Console.GREEN}${description} for ${fullHeal} hp!${Console.RESET}")
 
-    return fullHeal
+    return target
   }
 }
 

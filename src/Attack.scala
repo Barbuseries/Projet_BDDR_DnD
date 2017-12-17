@@ -1,3 +1,5 @@
+import ViciousFlail.name
+
 import scala.collection.mutable.ArrayBuffer
 
 // TODO: Take into account the creature type when computing the damages.
@@ -5,9 +7,10 @@ abstract case class Attack(name: String) extends Action[Creature] with Serializa
   var allStrikes: ArrayBuffer[Int] = ArrayBuffer.empty[Int]
   var damageFormula: Formula = _
 
+  // Return the last hit creature
   override def apply(attacker: Creature,
           initialCreature: Creature = null,
-          targetSelector: (Creature) => Creature = null): Int = {
+          targetSelector: (Creature) => Creature = null): Creature = {
     assert(damageFormula != null)
 
     var total = 0
@@ -21,7 +24,7 @@ abstract case class Attack(name: String) extends Action[Creature] with Serializa
         defender = targetSelector(oldDefender)
 
       if (defender == null)
-         return total
+         return defender
 
       assert(defender.isAlive())
 
@@ -93,11 +96,12 @@ abstract case class Attack(name: String) extends Action[Creature] with Serializa
         defender = null
       }
       else if (!defender.isAlive()) {
+        oldDefender = null
         defender = null
       }
     })
 
-    return total
+    return oldDefender
   }
 
   // TODO: Add a min/max reach attribute (to test if this attack can be used)
@@ -134,6 +138,12 @@ class Slam(name: String = "slam") extends Attack(name) {
   }
 }
 
+class Flail(name: String) extends Attack(name) {
+  override def describe(a: Creature, d: Creature): String = {
+    return s"A powerful swing from ${a.name}'s ${name} into ${d.name}"
+  }
+}
+
 // Solar
 object DancingGreatSword extends Sword("+5 dancing greatsword") {
   allStrikes = ArrayBuffer[Int](35, 30, 25, 20)
@@ -152,13 +162,14 @@ object MWKBattleAxe extends Axe("mwk battleaxe") {
 }
 
 // Warlord
-object ViciousFlail extends Attack("+1 vicious flail") {
+object ViciousFlail extends Flail("+1 vicious flail") {
   allStrikes = ArrayBuffer[Int](20, 15, 10)
   damageFormula = new Formula(1, Dice.d8, 10)
+}
 
-  override def describe(a: Creature, d: Creature): String = {
-    return s"A powerful swing from ${a.name}'s ${name} into ${d.name}"
-  }
+object ViciousFlail2 extends Flail("+1 vicious flail") {
+  allStrikes = ArrayBuffer[Int](24, 19, 14)
+  damageFormula = new Formula(1, Dice.d8, 10)
 }
 
 object LionShield extends Attack("lion's shield") {
@@ -177,6 +188,11 @@ object OrcDoubleAxe extends Axe("+1 orc double axe") {
 }
 
 object OrcDoubleAxe2 extends Axe("+1 orc double axe") {
+  allStrikes = ArrayBuffer[Int](17, 12, 7)
+  damageFormula = new Formula(1, Dice.d8, 7)
+}
+
+object OrcDoubleAxe3 extends Axe("+1 orc double axe") {
   allStrikes = ArrayBuffer[Int](17, 12)
   damageFormula = new Formula(1, Dice.d8, 7)
 }
