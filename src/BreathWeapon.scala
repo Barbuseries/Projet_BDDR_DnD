@@ -22,6 +22,8 @@ class BreathWeapon(val name: String) extends Action[List[Creature]] with Seriali
 
     var oldDefenders = defenders
 
+    println(s"${attacker.name} uses ${name}...")
+
     defenders.foreach(d => {
       if (defenders == null)
         defenders = targetSelector(oldDefenders)

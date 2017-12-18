@@ -265,7 +265,7 @@ object Bestiary {
   abstract class Angel(override val name: String) extends Creature(name) {
     creatureType = CreatureType.Angel
 
-    val minCountToUseMassHeal = 3
+    val minRatioToUseMassHeal = 0.3f
 
     private def findWeakestAngelSlayer(context: Context): Creature = {
         val result = context.onEnemies[(Int, Int)]((e, creature, key) => {
@@ -288,7 +288,7 @@ object Bestiary {
       var dragonThreat = 0
 
       if(findDragon(context) != null) {
-        dragonThreat = AcidBreath.damageFormula.computeAverage()
+        dragonThreat = Math.round(AcidBreath.damageFormula.computeAverage() * 1.25f)
       }
 
       val includeSelf = true
@@ -316,8 +316,10 @@ object Bestiary {
       val monoHeals = healingSpells.filter(_.isInstanceOf[MonoHealingSpell])
       val massHeals = healingSpells.filter(_.isInstanceOf[MultipleHealingSpell])
 
+      val ratio = (1.0f * alliesToHeal.length / allies.length)
+
       // Youhou, heuristics!
-      val useMassHeal = (((massHeals.length != 0) && (alliesToHeal.length >= minCountToUseMassHeal)) ||
+      val useMassHeal = (((massHeals.length != 0) && (ratio >= minRatioToUseMassHeal)) ||
                          (monoHeals.length == 0))
 
       // TODO: Get the most useful
@@ -472,7 +474,7 @@ object Bestiary {
 
     addSpell(AlterSelf)
 
-    val roundsBetweenAttacks = 2
+    val roundsBetweenAttacks = 1
     var remainingRoundsBeforeAttack = 0
 
     private def roundWhenCloseEnough(): Int = {

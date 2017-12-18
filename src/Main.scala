@@ -88,6 +88,8 @@ object Main {
     while (!done) {
       round += 1
 
+      println(s"\t\t\t${Console.BOLD}Round ${round}${Console.RESET}")
+
       orderList.foreach((i) => {
         val id = i._1
         val key = i._2
@@ -136,11 +138,11 @@ object Main {
       println("How did _that_ happen?")
     }
     else if (winners > 0) {
-      println(s"\t\t\t\tALLIES WIN. ${Console.BLINK}${Console.RED}DIVINITY.${Console.RESET}")
+      println(s"\t\t\t\t${Console.BOLD}ALLIES WIN. ${Console.BLINK}${Console.RED}DIVINITY.${Console.RESET}")
       println(s"${winners} allies left.")
     }
     else {
-      println(s"\t\t\t\t${Console.RED_B}GAME OVER${Console.RESET}")
+      println(s"\t\t\t\t${Console.RED_B}${Console.BOLD}GAME OVER${Console.RESET}")
       println(s"${-winners} enemies left.")
     }
   }
